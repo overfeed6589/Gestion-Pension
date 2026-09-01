@@ -15,7 +15,8 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword(data);
 
   if (error) {
-    redirect('/login?error=Identifiants invalides');
+    const errorMessage = encodeURIComponent('Identifiants ou mot de passe incorrects');
+    redirect(`/login?error=${errorMessage}`);
   }
 
   revalidatePath('/', 'layout');
