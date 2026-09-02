@@ -6,7 +6,10 @@ import {
   date, 
   timestamp, 
   integer, 
-  jsonb 
+  jsonb,
+  pgEnum,
+  index,
+  varchar 
 } from 'drizzle-orm/pg-core';
 import { defineRelations } from 'drizzle-orm';
 
@@ -52,8 +55,52 @@ export const BILLING_TYPES = [
   'per_stay', // Par séjour
 ] as const;
 
-export const CHANNEL_TYPES = ['email', 'sms', 'whatsapp', 'web_chat'] as const;
-export const CONVERSATION_STATUSES = ['active', 'closed', 'needs_human_review'] as const;
+export const CHANNEL_TYPES = [
+  'email', 
+  'sms', 
+  'whatsapp', 
+  'web_chat'
+] as const;
+export type ChannelTypes = typeof CHANNEL_TYPES[number];
+
+export const CONVERSATION_STATUSES = [
+  'active', 
+  'closed', 
+  'needs_human_review'
+] as const;
+export type conversationStatuses = typeof CONVERSATION_STATUSES[number];
+
+export const INVOICE_TYPES = [
+  'deposit', 
+  'final', 
+  'credit_note'
+] as const;
+export type InvoiceType = (typeof INVOICE_TYPES)[number];
+
+export const INVOICE_STATUSES = [
+  'draft', 
+  'issued', 
+  'paid', 
+  'cancelled', 
+  'refunded'
+] as const;
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
+
+export const E_INVOICE_STATUSES = [
+  'pending', 
+  'transmitted', 
+  'accepted', 
+  'rejected'
+] as const;
+export type EInvoiceStatus = (typeof E_INVOICE_STATUSES)[number];
+
+export const PURCHASE_ORDER_STATUSES = [
+  'draft', 
+  'sent', 
+  'received', 
+  'cancelled'
+] as const;
+export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];
 
 // Types exportés pour autocomplétion TypeScript
 export type BookingStatus = typeof BOOKING_STATUSES[number];
@@ -85,7 +132,12 @@ export const clients = pgTable('clients', {
   
   // Intégration Stripe Client
   stripeCustomerId: text('stripe_customer_id'),
-  
+
+  // Si c'est une entreprise qui est facturé
+  siret: varchar('siret', { length: 14 }),
+  vatNumber: varchar('vat_number', { length: 32 }),
+  isB2b: boolean('is_b2b').default(false).notNull(),
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -170,6 +222,10 @@ export const bookings = pgTable('bookings', {
   // Clés API Stripe
   stripeCheckoutSessionId: text('stripe_checkout_session_id'),
   stripePaymentIntentId: text('stripe_payment_intent_id'),
+
+  // Dates du séjour enregistré 
+  checkInDate: timestamp('check_in_date').notNull(),
+  checkOutDate: timestamp('check_out_date').notNull(),
 
   // Registre légal Entrée/Sortie réelles
   actualCheckIn: timestamp('actual_check_in'),
@@ -294,7 +350,83 @@ export const internalNotes = pgTable('internal_notes', {
 });
 
 // ==========================================
-// 11. RELATIONS UNIFIÉES (defineRelations)
+// 11. FACTURATION CLIENT (VENTES)
+// ==========================================
+export const invoices = pgTable('invoices', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  invoiceNumber: varchar('invoice_number', { length: 50 }).notNull().unique(),
+  type: varchar('type', { length: 20 }).$type<InvoiceType>().default('final').notNull(),
+  status: varchar('status', { length: 20 }).$type<InvoiceStatus>().default('draft').notNull(),
+  
+  // Facturation Électronique / PDP / Pennylane
+  eInvoiceStatus: varchar('e_invoice_status', { length: 20 }).$type<EInvoiceStatus>().default('pending').notNull(),
+  pennylaneId: varchar('pennylane_id', { length: 255 }),
+  transmittedAt: timestamp('transmitted_at'),
+
+  clientId: uuid('client_id').references(() => clients.id).notNull(),
+  bookingId: uuid('booking_id').references(() => bookings.id),
+  
+  subtotalInCents: integer('subtotal_in_cents').notNull(),
+  taxInCents: integer('tax_in_cents').notNull().default(0),
+  totalInCents: integer('total_in_cents').notNull(),
+  vatRate: integer('vat_rate').default(2000).notNull(), // 2000 = 20.00%
+  
+  pdfUrl: text('pdf_url'),
+  dueDate: timestamp('due_date'),
+  paidAt: timestamp('paid_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  clientIdIdx: index('invoices_client_id_idx').on(table.clientId),
+  bookingIdIdx: index('invoices_booking_id_idx').on(table.bookingId),
+}));
+
+export const invoiceItems = pgTable('invoice_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  invoiceId: uuid('invoice_id').references(() => invoices.id, { onDelete: 'cascade' }).notNull(),
+  description: varchar('description', { length: 255 }).notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  unitPriceInCents: integer('unit_price_in_cents').notNull(),
+  totalInCents: integer('total_in_cents').notNull(),
+});
+
+// ==========================================
+// 12. FOURNISSEURS & ACHATS (EXPENSES)
+// ==========================================
+export const suppliers = pgTable('suppliers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  contactEmail: varchar('contact_email', { length: 255 }),
+  phone: varchar('phone', { length: 50 }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const purchaseOrders = pgTable('purchase_orders', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orderNumber: varchar('order_number', { length: 50 }).notNull().unique(),
+  supplierId: uuid('supplier_id').references(() => suppliers.id).notNull(),
+  status: varchar('status', { length: 20 }).$type<PurchaseOrderStatus>().default('draft').notNull(),
+  totalCostInCents: integer('total_cost_in_cents').notNull().default(0),
+  notes: text('notes'),
+  
+  sentAt: timestamp('sent_at'),
+  expectedDeliveryDate: timestamp('expected_delivery_date'),
+  receivedAt: timestamp('received_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  supplierIdIdx: index('purchase_orders_supplier_id_idx').on(table.supplierId),
+}));
+
+export const purchaseOrderItems = pgTable('purchase_order_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  purchaseOrderId: uuid('purchase_order_id').references(() => purchaseOrders.id, { onDelete: 'cascade' }).notNull(),
+  description: varchar('description', { length: 255 }).notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  unitCostInCents: integer('unit_cost_in_cents').notNull(),
+  totalCostInCents: integer('total_cost_in_cents').notNull(),
+});
+
+// ==========================================
+// RELATIONS UNIFIÉES (defineRelations)
 // ==========================================
 export const relations = defineRelations(
   { 
@@ -313,7 +445,13 @@ export const relations = defineRelations(
     conversations,
     messages,
     pensionRules,
-    internalNotes
+    internalNotes,
+    // --- NOUVELLES TABLES ---
+    invoices,
+    invoiceItems,
+    suppliers,
+    purchaseOrders,
+    purchaseOrderItems,
   }, 
   (r) => ({
     clients: {
@@ -321,6 +459,7 @@ export const relations = defineRelations(
       bookings: r.many.bookings(),
       conversations: r.many.conversations(),
       internalNotes: r.many.internalNotes(),
+      invoices: r.many.invoices(), // <-- Ajouté
     },
     pets: {
       owner: r.one.clients({ from: r.pets.clientId, to: r.clients.id }),
@@ -350,6 +489,7 @@ export const relations = defineRelations(
       extraServices: r.many.bookingExtraServices(),
       payments: r.many.payments(),
       internalNotes: r.many.internalNotes(),
+      invoices: r.many.invoices(), // <-- Ajouté
     },
     bookingExtraServices: {
       booking: r.one.bookings({ from: r.bookingExtraServices.bookingId, to: r.bookings.id }),
@@ -385,6 +525,26 @@ export const relations = defineRelations(
       client: r.one.clients({ from: r.internalNotes.clientId, to: r.clients.id }),
       pet: r.one.pets({ from: r.internalNotes.petId, to: r.pets.id }),
       booking: r.one.bookings({ from: r.internalNotes.bookingId, to: r.bookings.id }),
+    },
+
+    // --- NOUVELLES RELATIONS ---
+    invoices: {
+      client: r.one.clients({ from: r.invoices.clientId, to: r.clients.id, optional: false }),
+      booking: r.one.bookings({ from: r.invoices.bookingId, to: r.bookings.id }),
+      items: r.many.invoiceItems(),
+    },
+    invoiceItems: {
+      invoice: r.one.invoices({ from: r.invoiceItems.invoiceId, to: r.invoices.id }),
+    },
+    suppliers: {
+      orders: r.many.purchaseOrders(),
+    },
+    purchaseOrders: {
+      supplier: r.one.suppliers({ from: r.purchaseOrders.supplierId, to: r.suppliers.id }),
+      items: r.many.purchaseOrderItems(),
+    },
+    purchaseOrderItems: {
+      order: r.one.purchaseOrders({ from: r.purchaseOrderItems.purchaseOrderId, to: r.purchaseOrders.id }),
     },
   })
 );

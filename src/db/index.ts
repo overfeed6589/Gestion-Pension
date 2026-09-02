@@ -1,8 +1,8 @@
-import { config } from 'dotenv';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import { relations } from './schema';
 
-config({ path: '.env.local' }); // or .env.local
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL est manquante dans les variables d\'environnement');
+}
 
-const client = postgres(process.env.DATABASE_URL!);
-export const db = drizzle({ client });
+export const db = drizzle(process.env.DATABASE_URL, { relations });
