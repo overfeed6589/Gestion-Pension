@@ -5,13 +5,73 @@ import {
   boolean, 
   date, 
   timestamp, 
-  integer,
+  integer, 
   jsonb 
 } from 'drizzle-orm/pg-core';
 import { defineRelations } from 'drizzle-orm';
 
 // ==========================================
-// 1. CLIENTS
+// 1. DÉFINITION DES VALEURS STRICTES (TYPES & ZOD)
+// ==========================================
+
+export const BOOKING_STATUSES = [
+  'pending',     // En attente de validation / acompte
+  'confirmed',   // Validée
+  'checked_in',  // Animal arrivé (en garde)
+  'checked_out', // Séjour terminé
+  'cancelled',   // Annulée
+] as const;
+
+export const PAYMENT_STATUSES = [
+  'unpaid',           // Non payé
+  'deposit_paid',     // Acompte payé
+  'fully_paid',       // Solde totalement réglé
+  'partially_refunded',// Partiellement remboursé
+  'refunded',         // Totalement remboursé
+] as const;
+
+export const PAYMENT_METHODS = [
+  'stripe',
+  'cash',
+  'card_reader',
+  'check',
+  'bank_transfer',
+  'other',
+] as const;
+
+export const PAYMENT_TRANSACTION_STATUSES = [
+  'succeeded',
+  'processing',
+  'failed',
+  'refunded',
+] as const;
+
+export const BILLING_TYPES = [
+  'per_unit', // À l'unité (ex: 1 toilettage)
+  'per_day',  // Par jour (ex: chauffage 3€/jour)
+  'per_stay', // Par séjour
+] as const;
+
+export const CHANNEL_TYPES = ['email', 'sms', 'whatsapp', 'web_chat'] as const;
+export const CONVERSATION_STATUSES = ['active', 'closed', 'needs_human_review'] as const;
+
+// Types exportés pour autocomplétion TypeScript
+export type BookingStatus = typeof BOOKING_STATUSES[number];
+export type PaymentStatus = typeof PAYMENT_STATUSES[number];
+export type PaymentMethod = typeof PAYMENT_METHODS[number];
+export type PaymentTransactionStatus = typeof PAYMENT_TRANSACTION_STATUSES[number];
+export type BillingType = typeof BILLING_TYPES[number];
+
+// Type structurel pour les vaccins (Option B JSONB)
+export type VaccineRecord = {
+  name: string;             // Ex: "Toux de chenil", "CHPL", "Rage"
+  administeredAt?: string; // Date d'injection YYYY-MM-DD
+  expiresAt?: string;      // Date de rappel YYYY-MM-DD
+  isMandatory?: boolean;   // Obligatoire pour la pension
+};
+
+// ==========================================
+// 2. CLIENTS
 // ==========================================
 export const clients = pgTable('clients', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -22,46 +82,49 @@ export const clients = pgTable('clients', {
   address: text('address'),
   emergencyContactName: text('emergency_contact_name'),
   emergencyContactPhone: text('emergency_contact_phone'),
+  
+  // Intégration Stripe Client
+  stripeCustomerId: text('stripe_customer_id'),
+  
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 // ==========================================
-// 2. ANIMAUX (PETS) - MENTIONS LÉGALES OBLIGATOIRES
+// 3. ANIMAUX (PETS) - CONFORMITÉ I-CAD & VACCINS (OPTION B)
 // ==========================================
 export const pets = pgTable('pets', {
   id: uuid('id').defaultRandom().primaryKey(),
   clientId: uuid('client_id').references(() => clients.id, { onDelete: 'cascade' }).notNull(),
   name: text('name').notNull(),
-  species: text('species').notNull(), // Chien, Chat, NAC, etc.
+  species: text('species').notNull(), // Chien, Chat, NAC
   breed: text('breed'),
   sex: text('sex').notNull(),
   isSterilized: boolean('is_sterilized').default(false).notNull(),
   birthDate: date('birth_date'),
   
-  // Conformité réglementaire française (I-CAD)
+  // Registre réglementaire français
   identificationNumber: text('identification_number').notNull(), // N° Puce / Tatouage
   passportNumber: text('passport_number'),
   veterinarianName: text('veterinarian_name'),
   veterinarianPhone: text('veterinarian_phone'),
   
-  // Santé
+  // Vaccins flexibles (Option B JSONB)
   vaccinesUpToDate: boolean('vaccines_up_to_date').default(true).notNull(),
-  lastVaccineDate: date('last_vaccine_date'),
-  nextVaccineDueDate: date('next_vaccine_due_date'),
+  vaccines: jsonb('vaccines').$type<VaccineRecord[]>().default([]).notNull(),
+  
   medicalNotes: text('medical_notes'),
-
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 // ==========================================
-// 3. LOGEMENTS & UNITÉS
+// 4. LOGEMENTS & UNITÉS
 // ==========================================
 export const housingCategories = pgTable('housing_categories', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: text('name').notNull(), // Ex: Box Luxe, Chenil Standard
   description: text('description'),
   capacity: integer('capacity').default(1).notNull(),
-  basePricePerNight: integer('base_price_per_night').notNull(), // Prix en centimes
+  basePricePerNight: integer('base_price_per_night').notNull(), // En centimes
 });
 
 export const housingUnits = pgTable('housing_units', {
@@ -80,56 +143,77 @@ export const housingBlocks = pgTable('housing_blocks', {
 });
 
 // ==========================================
-// 4. CATALOGUE DES SERVICES EXTRAS (Options)
+// 5. SERVICES ANNEXES / CATALOGUE
 // ==========================================
 export const extraServices = pgTable('extra_services', {
   id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(), // Ex: Toilettage, Supplement Pâtée, Soins médicaux, Promenade
+  name: text('name').notNull(), // Ex: Toilettage, Pâtée, Soins, Promenade
   description: text('description'),
-  defaultPrice: integer('default_price').notNull(), // Prix unitaire en centimes
-  billingType: text('billing_type').default('per_unit').notNull(), // 'per_unit', 'per_day', 'per_stay'
+  defaultPrice: integer('default_price').notNull(), // En centimes
+  billingType: text('billing_type', { enum: BILLING_TYPES }).default('per_unit').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
 });
 
 // ==========================================
-// 5. RÉSERVATIONS & SUIVI PAIEMENT / REGISTRE
+// 6. RÉSERVATIONS, REGISTRE & STRIPE
 // ==========================================
 export const bookings = pgTable('bookings', {
   id: uuid('id').defaultRandom().primaryKey(),
   clientId: uuid('client_id').references(() => clients.id).notNull(),
-  status: text('status').default('pending').notNull(), // 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'
+  status: text('status', { enum: BOOKING_STATUSES }).default('pending').notNull(),
   
-  // Financier & Acomptes
-  totalPrice: integer('total_price').notNull(), // Total en centimes
-  depositAmount: integer('deposit_amount').default(0).notNull(), // Acompte prévu ou versé
-  depositPaid: boolean('deposit_paid').default(false).notNull(), // Statut acompte
-  paymentStatus: text('payment_status').default('unpaid').notNull(), // 'unpaid', 'deposit_paid', 'fully_paid', 'refunded'
+  // Tarification & Acomptes (en centimes)
+  totalPrice: integer('total_price').notNull(),
+  depositAmount: integer('deposit_amount').default(0).notNull(),
+  paymentStatus: text('payment_status', { enum: PAYMENT_STATUSES }).default('unpaid').notNull(),
   
-  // Registre réglementaire Entrée / Sortie réelles
+  // Clés API Stripe
+  stripeCheckoutSessionId: text('stripe_checkout_session_id'),
+  stripePaymentIntentId: text('stripe_payment_intent_id'),
+
+  // Registre légal Entrée/Sortie réelles
   actualCheckIn: timestamp('actual_check_in'),
   actualCheckOut: timestamp('actual_check_out'),
 
-  // Check-in matériel & alimentation
-  dietNotes: text('diet_notes'), // Consignes nourriture
-  belongingsNotes: text('belongings_notes'), // Affaires déposées
+  // Option A : Notes simples pour le check-in
+  dietNotes: text('diet_notes'),
+  belongingsNotes: text('belongings_notes'),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-// Services annexes commandés pour une réservation
 export const bookingExtraServices = pgTable('booking_extra_services', {
   id: uuid('id').defaultRandom().primaryKey(),
   bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'cascade' }).notNull(),
   serviceId: uuid('service_id').references(() => extraServices.id).notNull(),
-  petId: uuid('pet_id').references(() => pets.id, { onDelete: 'cascade' }), // Optionnel : si le soin concerne un animal précis
+  petId: uuid('pet_id').references(() => pets.id, { onDelete: 'cascade' }),
   quantity: integer('quantity').default(1).notNull(),
-  unitPrice: integer('unit_price').notNull(), // Prix appliqué au moment de l'achat
+  unitPrice: integer('unit_price').notNull(),
   totalPrice: integer('total_price').notNull(),
   notes: text('notes'),
 });
 
 // ==========================================
-// 6. SEGMENTS DE SÉJOUR & OCCUPATION
+// 7. HISTORIQUE DES TRANSACTIONS / PAYMENTS
+// ==========================================
+export const payments = pgTable('payments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'cascade' }).notNull(),
+  amount: integer('amount').notNull(), // En centimes
+  currency: text('currency').default('EUR').notNull(),
+  method: text('method', { enum: PAYMENT_METHODS }).notNull(),
+  
+  // Clés Stripe de la transaction
+  stripePaymentIntentId: text('stripe_payment_intent_id'),
+  stripeChargeId: text('stripe_charge_id'),
+  
+  status: text('status', { enum: PAYMENT_TRANSACTION_STATUSES }).notNull(),
+  metadata: jsonb('metadata'), // Copie du payload Webhook si besoin
+  paidAt: timestamp('paid_at').defaultNow().notNull(),
+});
+
+// ==========================================
+// 8. SEGMENTS DE SÉJOUR & OCCUPATION
 // ==========================================
 export const bookingSegments = pgTable('booking_segments', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -148,7 +232,7 @@ export const segmentPets = pgTable('segment_pets', {
 });
 
 // ==========================================
-// 7. COMPTES RENDUS QUOTIDIENS
+// 9. COMPTES RENDUS QUOTIDIENS
 // ==========================================
 export const dailyReports = pgTable('daily_reports', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -167,13 +251,13 @@ export const dailyReports = pgTable('daily_reports', {
 });
 
 // ==========================================
-// 8. BILDUNGS & AGENT IA (CONVERSATIONS, NOTES, RÈGLES)
+// 10. COMMUNICATIONS & AGENT IA
 // ==========================================
 export const conversations = pgTable('conversations', {
   id: uuid('id').defaultRandom().primaryKey(),
   clientId: uuid('client_id').references(() => clients.id, { onDelete: 'cascade' }).notNull(),
-  channel: text('channel').default('web_chat').notNull(),
-  status: text('status').default('active').notNull(),
+  channel: text('channel', { enum: CHANNEL_TYPES }).default('web_chat').notNull(),
+  status: text('status', { enum: CONVERSATION_STATUSES }).default('active').notNull(),
   summary: text('summary'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -182,7 +266,7 @@ export const conversations = pgTable('conversations', {
 export const messages = pgTable('messages', {
   id: uuid('id').defaultRandom().primaryKey(),
   conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'cascade' }).notNull(),
-  senderType: text('sender_type').notNull(),
+  senderType: text('sender_type').notNull(), // 'client', 'staff', 'ai_agent'
   content: text('content').notNull(),
   isApprovedByHuman: boolean('is_approved_by_human').default(true).notNull(),
   aiMetadata: jsonb('ai_metadata'),
@@ -210,7 +294,7 @@ export const internalNotes = pgTable('internal_notes', {
 });
 
 // ==========================================
-// RELATIONS UNIFIÉES (defineRelations)
+// 11. RELATIONS UNIFIÉES (defineRelations)
 // ==========================================
 export const relations = defineRelations(
   { 
@@ -222,6 +306,7 @@ export const relations = defineRelations(
     extraServices,
     bookings, 
     bookingExtraServices,
+    payments,
     bookingSegments, 
     segmentPets, 
     dailyReports,
@@ -263,12 +348,16 @@ export const relations = defineRelations(
       client: r.one.clients({ from: r.bookings.clientId, to: r.clients.id }),
       segments: r.many.bookingSegments(),
       extraServices: r.many.bookingExtraServices(),
+      payments: r.many.payments(),
       internalNotes: r.many.internalNotes(),
     },
     bookingExtraServices: {
       booking: r.one.bookings({ from: r.bookingExtraServices.bookingId, to: r.bookings.id }),
       service: r.one.extraServices({ from: r.bookingExtraServices.serviceId, to: r.extraServices.id }),
       pet: r.one.pets({ from: r.bookingExtraServices.petId, to: r.pets.id }),
+    },
+    payments: {
+      booking: r.one.bookings({ from: r.payments.bookingId, to: r.bookings.id }),
     },
     bookingSegments: {
       booking: r.one.bookings({ from: r.bookingSegments.bookingId, to: r.bookings.id }),
