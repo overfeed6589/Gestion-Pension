@@ -5,11 +5,14 @@ import {
   boolean, 
   date, 
   timestamp, 
-  integer 
+  integer,
+  jsonb 
 } from 'drizzle-orm/pg-core';
 import { defineRelations } from 'drizzle-orm';
 
-// --- 1. CLIENTS ---
+// ==========================================
+// 1. CLIENTS
+// ==========================================
 export const clients = pgTable('clients', {
   id: uuid('id').defaultRandom().primaryKey(),
   firstName: text('first_name').notNull(),
@@ -22,105 +25,192 @@ export const clients = pgTable('clients', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-// --- 2. ANIMAUX (PETS) avec mentions légales ---
+// ==========================================
+// 2. ANIMAUX (PETS) - MENTIONS LÉGALES OBLIGATOIRES
+// ==========================================
 export const pets = pgTable('pets', {
   id: uuid('id').defaultRandom().primaryKey(),
   clientId: uuid('client_id').references(() => clients.id, { onDelete: 'cascade' }).notNull(),
   name: text('name').notNull(),
   species: text('species').notNull(), // Chien, Chat, NAC, etc.
-  breed: text('breed'), // Race
-  sex: text('sex').notNull(), // Mâle / Femelle
+  breed: text('breed'),
+  sex: text('sex').notNull(),
   isSterilized: boolean('is_sterilized').default(false).notNull(),
   birthDate: date('birth_date'),
   
-  // --- ÉLÉMENTS LÉGAUX ET VÉTÉRINAIRES ---
-  identificationNumber: text('identification_number').notNull(), // N° I-CAD / Puce / Tatouage (Obligation légale)
-  passportNumber: text('passport_number'), // N° de passeport européen
-  veterinarianName: text('veterinarian_name'), // Vétérinaire traitant
-  veterinarianPhone: text('veterinarian_phone'), // Téléphone du vétérinaire
+  // Conformité réglementaire française (I-CAD)
+  identificationNumber: text('identification_number').notNull(), // N° Puce / Tatouage
+  passportNumber: text('passport_number'),
+  veterinarianName: text('veterinarian_name'),
+  veterinarianPhone: text('veterinarian_phone'),
   
-  // Vaccins & santé
+  // Santé
   vaccinesUpToDate: boolean('vaccines_up_to_date').default(true).notNull(),
   lastVaccineDate: date('last_vaccine_date'),
-  nextVaccineDueDate: date('next_vaccine_due_date'), // Date de rappel
-  medicalNotes: text('medical_notes'), // Allergies, pathologies, régimes spéciaux
+  nextVaccineDueDate: date('next_vaccine_due_date'),
+  medicalNotes: text('medical_notes'),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-// --- 3. CATÉGORIES DE LOGEMENT (Box / Chenil) ---
+// ==========================================
+// 3. LOGEMENTS & UNITÉS
+// ==========================================
 export const housingCategories = pgTable('housing_categories', {
   id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(), // Ex: Box Luxe, Chenil Standard, Chatellerie
+  name: text('name').notNull(), // Ex: Box Luxe, Chenil Standard
   description: text('description'),
-  capacity: integer('capacity').default(1).notNull(), // Nombre d'animaux max
+  capacity: integer('capacity').default(1).notNull(),
   basePricePerNight: integer('base_price_per_night').notNull(), // Prix en centimes
 });
 
-// --- 4. UNITÉS PHYSIQUES ---
 export const housingUnits = pgTable('housing_units', {
   id: uuid('id').defaultRandom().primaryKey(),
   categoryId: uuid('category_id').references(() => housingCategories.id).notNull(),
-  name: text('name').notNull(), // Ex: "Box A1", "Chambre 12"
+  name: text('name').notNull(), // Ex: "Box A1"
   isAvailable: boolean('is_available').default(true).notNull(),
 });
 
-// --- 5. BLOCAGES / TRAVAUX ---
 export const housingBlocks = pgTable('housing_blocks', {
   id: uuid('id').defaultRandom().primaryKey(),
   unitId: uuid('unit_id').references(() => housingUnits.id, { onDelete: 'cascade' }).notNull(),
   startDate: date('start_date').notNull(),
   endDate: date('end_date').notNull(),
-  reason: text('reason'), // Travaux, Désinfection, etc.
+  reason: text('reason'),
 });
 
-// --- 6. RÉSERVATIONS (DOSSIER CLIENT) ---
+// ==========================================
+// 4. CATALOGUE DES SERVICES EXTRAS (Options)
+// ==========================================
+export const extraServices = pgTable('extra_services', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(), // Ex: Toilettage, Supplement Pâtée, Soins médicaux, Promenade
+  description: text('description'),
+  defaultPrice: integer('default_price').notNull(), // Prix unitaire en centimes
+  billingType: text('billing_type').default('per_unit').notNull(), // 'per_unit', 'per_day', 'per_stay'
+  isActive: boolean('is_active').default(true).notNull(),
+});
+
+// ==========================================
+// 5. RÉSERVATIONS & SUIVI PAIEMENT / REGISTRE
+// ==========================================
 export const bookings = pgTable('bookings', {
   id: uuid('id').defaultRandom().primaryKey(),
   clientId: uuid('client_id').references(() => clients.id).notNull(),
-  status: text('status').default('pending').notNull(), // pending, confirmed, cancelled, completed
-  totalPrice: integer('total_price').notNull(), // Prix total recalculé
+  status: text('status').default('pending').notNull(), // 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'
+  
+  // Financier & Acomptes
+  totalPrice: integer('total_price').notNull(), // Total en centimes
+  depositAmount: integer('deposit_amount').default(0).notNull(), // Acompte prévu ou versé
+  depositPaid: boolean('deposit_paid').default(false).notNull(), // Statut acompte
+  paymentStatus: text('payment_status').default('unpaid').notNull(), // 'unpaid', 'deposit_paid', 'fully_paid', 'refunded'
+  
+  // Registre réglementaire Entrée / Sortie réelles
+  actualCheckIn: timestamp('actual_check_in'),
+  actualCheckOut: timestamp('actual_check_out'),
+
+  // Check-in matériel & alimentation
+  dietNotes: text('diet_notes'), // Consignes nourriture
+  belongingsNotes: text('belongings_notes'), // Affaires déposées
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-// --- 7. SEGMENTS DE SÉJOUR ---
+// Services annexes commandés pour une réservation
+export const bookingExtraServices = pgTable('booking_extra_services', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'cascade' }).notNull(),
+  serviceId: uuid('service_id').references(() => extraServices.id).notNull(),
+  petId: uuid('pet_id').references(() => pets.id, { onDelete: 'cascade' }), // Optionnel : si le soin concerne un animal précis
+  quantity: integer('quantity').default(1).notNull(),
+  unitPrice: integer('unit_price').notNull(), // Prix appliqué au moment de l'achat
+  totalPrice: integer('total_price').notNull(),
+  notes: text('notes'),
+});
+
+// ==========================================
+// 6. SEGMENTS DE SÉJOUR & OCCUPATION
+// ==========================================
 export const bookingSegments = pgTable('booking_segments', {
   id: uuid('id').defaultRandom().primaryKey(),
   bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'cascade' }).notNull(),
   categoryId: uuid('category_id').references(() => housingCategories.id).notNull(),
-  unitId: uuid('unit_id').references(() => housingUnits.id), // Assignation manuelle (nullable)
+  unitId: uuid('unit_id').references(() => housingUnits.id),
   startDate: date('start_date').notNull(),
   endDate: date('end_date').notNull(),
   segmentPrice: integer('segment_price').notNull(),
 });
 
-// --- 8. TABLE DE LIAISON SEGMENT <-> ANIMAUX ---
 export const segmentPets = pgTable('segment_pets', {
   id: uuid('id').defaultRandom().primaryKey(),
   segmentId: uuid('segment_id').references(() => bookingSegments.id, { onDelete: 'cascade' }).notNull(),
   petId: uuid('pet_id').references(() => pets.id, { onDelete: 'cascade' }).notNull(),
 });
 
-// --- 9. COMPTES RENDUS QUOTIDIENS (DAILY REPORTS) ---
+// ==========================================
+// 7. COMPTES RENDUS QUOTIDIENS
+// ==========================================
 export const dailyReports = pgTable('daily_reports', {
   id: uuid('id').defaultRandom().primaryKey(),
   petId: uuid('pet_id').references(() => pets.id, { onDelete: 'cascade' }).notNull(),
-  segmentId: uuid('segment_id').references(() => bookingSegments.id, { onDelete: 'set null' }), // Optionnel : lié au séjour en cours
-  reportDate: date('report_date').notNull(), // Date du compte rendu
+  segmentId: uuid('segment_id').references(() => bookingSegments.id, { onDelete: 'set null' }),
+  reportDate: date('report_date').notNull(),
   
-  appetite: text('appetite'), // Ex: Tout mangé, Moitié, Refus
-  stoolCondition: text('stool_condition'), // Ex: Normal, Molle, Diarrhée
-  behavior: text('behavior'), // Ex: Calme, Anxieux, Joueur, Agressif
+  appetite: text('appetite'),
+  stoolCondition: text('stool_condition'),
+  behavior: text('behavior'),
   medicationGiven: boolean('medication_given').default(false).notNull(),
-  medicationNotes: text('medication_notes'), // Détails des soins donnés
-  notes: text('notes'), // Remarques générales du soigneur
+  medicationNotes: text('medication_notes'),
+  notes: text('notes'),
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// ==========================================
+// 8. BILDUNGS & AGENT IA (CONVERSATIONS, NOTES, RÈGLES)
+// ==========================================
+export const conversations = pgTable('conversations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  clientId: uuid('client_id').references(() => clients.id, { onDelete: 'cascade' }).notNull(),
+  channel: text('channel').default('web_chat').notNull(),
+  status: text('status').default('active').notNull(),
+  summary: text('summary'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const messages = pgTable('messages', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'cascade' }).notNull(),
+  senderType: text('sender_type').notNull(),
+  content: text('content').notNull(),
+  isApprovedByHuman: boolean('is_approved_by_human').default(true).notNull(),
+  aiMetadata: jsonb('ai_metadata'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const pensionRules = pgTable('pension_rules', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  category: text('category').notNull(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  isPublic: boolean('is_public').default(true).notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const internalNotes = pgTable('internal_notes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  clientId: uuid('client_id').references(() => clients.id, { onDelete: 'cascade' }),
+  petId: uuid('pet_id').references(() => pets.id, { onDelete: 'cascade' }),
+  bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'cascade' }),
+  authorType: text('author_type').default('staff').notNull(),
+  content: text('content').notNull(),
+  isImportant: boolean('is_important').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 // ==========================================
-// RELATIONS UNIFIÉES (defineRelations - V2)
+// RELATIONS UNIFIÉES (defineRelations)
 // ==========================================
 export const relations = defineRelations(
   { 
@@ -129,84 +219,83 @@ export const relations = defineRelations(
     housingCategories, 
     housingUnits, 
     housingBlocks, 
+    extraServices,
     bookings, 
+    bookingExtraServices,
     bookingSegments, 
     segmentPets, 
-    dailyReports 
+    dailyReports,
+    conversations,
+    messages,
+    pensionRules,
+    internalNotes
   }, 
   (r) => ({
     clients: {
       pets: r.many.pets(),
       bookings: r.many.bookings(),
+      conversations: r.many.conversations(),
+      internalNotes: r.many.internalNotes(),
     },
     pets: {
-      owner: r.one.clients({
-        from: r.pets.clientId,
-        to: r.clients.id,
-      }),
+      owner: r.one.clients({ from: r.pets.clientId, to: r.clients.id }),
       segmentLinks: r.many.segmentPets(),
       dailyReports: r.many.dailyReports(),
+      internalNotes: r.many.internalNotes(),
+      bookingServices: r.many.bookingExtraServices(),
     },
     housingCategories: {
       units: r.many.housingUnits(),
       bookingSegments: r.many.bookingSegments(),
     },
     housingUnits: {
-      category: r.one.housingCategories({
-        from: r.housingUnits.categoryId,
-        to: r.housingCategories.id,
-      }),
+      category: r.one.housingCategories({ from: r.housingUnits.categoryId, to: r.housingCategories.id }),
       blocks: r.many.housingBlocks(),
       bookingSegments: r.many.bookingSegments(),
     },
     housingBlocks: {
-      unit: r.one.housingUnits({
-        from: r.housingBlocks.unitId,
-        to: r.housingUnits.id,
-      }),
+      unit: r.one.housingUnits({ from: r.housingBlocks.unitId, to: r.housingUnits.id }),
+    },
+    extraServices: {
+      bookingServices: r.many.bookingExtraServices(),
     },
     bookings: {
-      client: r.one.clients({
-        from: r.bookings.clientId,
-        to: r.clients.id,
-      }),
+      client: r.one.clients({ from: r.bookings.clientId, to: r.clients.id }),
       segments: r.many.bookingSegments(),
+      extraServices: r.many.bookingExtraServices(),
+      internalNotes: r.many.internalNotes(),
+    },
+    bookingExtraServices: {
+      booking: r.one.bookings({ from: r.bookingExtraServices.bookingId, to: r.bookings.id }),
+      service: r.one.extraServices({ from: r.bookingExtraServices.serviceId, to: r.extraServices.id }),
+      pet: r.one.pets({ from: r.bookingExtraServices.petId, to: r.pets.id }),
     },
     bookingSegments: {
-      booking: r.one.bookings({
-        from: r.bookingSegments.bookingId,
-        to: r.bookings.id,
-      }),
-      category: r.one.housingCategories({
-        from: r.bookingSegments.categoryId,
-        to: r.housingCategories.id,
-      }),
-      assignedUnit: r.one.housingUnits({
-        from: r.bookingSegments.unitId,
-        to: r.housingUnits.id,
-      }),
+      booking: r.one.bookings({ from: r.bookingSegments.bookingId, to: r.bookings.id }),
+      category: r.one.housingCategories({ from: r.bookingSegments.categoryId, to: r.housingCategories.id }),
+      assignedUnit: r.one.housingUnits({ from: r.bookingSegments.unitId, to: r.housingUnits.id }),
       occupantLinks: r.many.segmentPets(),
       dailyReports: r.many.dailyReports(),
     },
     segmentPets: {
-      segment: r.one.bookingSegments({
-        from: r.segmentPets.segmentId,
-        to: r.bookingSegments.id,
-      }),
-      pet: r.one.pets({
-        from: r.segmentPets.petId,
-        to: r.pets.id,
-      }),
+      segment: r.one.bookingSegments({ from: r.segmentPets.segmentId, to: r.bookingSegments.id }),
+      pet: r.one.pets({ from: r.segmentPets.petId, to: r.pets.id }),
     },
     dailyReports: {
-      pet: r.one.pets({
-        from: r.dailyReports.petId,
-        to: r.pets.id,
-      }),
-      segment: r.one.bookingSegments({
-        from: r.dailyReports.segmentId,
-        to: r.bookingSegments.id,
-      }),
+      pet: r.one.pets({ from: r.dailyReports.petId, to: r.pets.id }),
+      segment: r.one.bookingSegments({ from: r.dailyReports.segmentId, to: r.bookingSegments.id }),
+    },
+    conversations: {
+      client: r.one.clients({ from: r.conversations.clientId, to: r.clients.id }),
+      messages: r.many.messages(),
+    },
+    messages: {
+      conversation: r.one.conversations({ from: r.messages.conversationId, to: r.conversations.id }),
+    },
+    internalNotes: {
+      client: r.one.clients({ from: r.internalNotes.clientId, to: r.clients.id }),
+      pet: r.one.pets({ from: r.internalNotes.petId, to: r.pets.id }),
+      booking: r.one.bookings({ from: r.internalNotes.bookingId, to: r.bookings.id }),
     },
   })
 );
