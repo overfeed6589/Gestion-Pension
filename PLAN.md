@@ -55,10 +55,15 @@ Règles :
 - **A3** Console Supabase : désactiver les inscriptions publiques (risque actuel :
   un compte auto-enregistré passerait les gardes `user != null`), confirmation email,
   MFA/TOTP pour owner/dev, captcha login ; retirer les clés inutilisées de `.env.local`.
-- **A4** Moindre privilège DB : rôle `app_user` (CRUD sur `public`), l'app utilise le
-  pooler transaction 6543, `postgres`/`DIRECT_URL` réservé aux migrations ; script SQL
-  de grants versionné.
-- **A5** Loader env validé (zod) pour échouer tôt si clé manquante ; secrets dans Vercel Env.
+- **A4 (code fait — à exécuter)** Moindre privilège DB : `scripts/apply-grants.ts`
+  (`npm run db:grants`, en DIRECT/5432) crée le rôle `app_user` + droits CRUD sur
+  `public` (tables, séquences, défauts pour les futures migrations) et retire le
+  CREATE public. Ensuite : `DATABASE_URL` = pooler 6543 avec `app_user`,
+  `DIRECT_URL` (postgres) réservé aux scripts DDL/seed. `seed-profiles.ts` passe par
+  DIRECT_URL.
+- **A5 (fait)** Loader env validé zod `src/lib/env.ts` (échec tôt, message listant
+  les clés manquantes) câblé sur `@/db`, `utils/supabase/server.ts` et Pennylane ;
+  secrets à mettre dans Vercel Env (rien en `NEXT_PUBLIC_` sauf URL projet + clé anon).
 
 ## Phase B — Intégrité des données & concurrence (anti double-réservation)
 

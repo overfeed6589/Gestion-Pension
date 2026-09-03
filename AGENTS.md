@@ -21,14 +21,20 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Drizzle ORM `drizzle-orm@^1.0.0-rc` (+ `drizzle-kit`) against Supabase-hosted Postgres; Supabase (`@supabase/ssr`) used for **auth only** (no Supabase data access). zod v4 for validation.
 
 ## Commands
-- `npm run dev` / `npm run build` / `npm run lint` (= `eslint`, flat config). **No test suite, no CI, no typecheck script** — typecheck manually with `npx tsc --noEmit`.
+- `npm run dev` / `npm run build` / `npm run lint` (= `eslint`, flat config). **No test suite, no CI** — typecheck via `npm run typecheck` (= `npx tsc --noEmit`).
+- DB admin scripts (run as `postgres` via `DIRECT_URL`, port 5432 — NOT the pooler):
+  `npm run db:grants` (`scripts/apply-grants.ts`, creates least-privilege role `app_user`),
+  `npm run seed:profiles` (`scripts/seed-profiles.ts`, maps Supabase auth emails → `profiles` rows).
 - Env comes from `.env.local` (gitignored). `drizzle.config.ts` loads it via `dotenv.config({ path: '.env.local' })` and uses `DIRECT_URL || DATABASE_URL`.
+- Runtime server env is validated once through `serverEnv` in `src/lib/env.ts` (zod, fails fast) — import it instead of reading `process.env` ad hoc; never import it from a client component.
+- Connection split (least privilege, PLAN.md A4): `DATABASE_URL` = pooler transaction 6543 with `app_user`; `DIRECT_URL` (5432, `postgres`) only for DDL/migrations/seeds/grants.
 - DB schema is `src/db/schema.ts`; no `drizzle/` migration snapshots are committed — schema edits are pushed straight to the live Supabase Postgres (recent commits are all schema updates).
 
 ## Architecture & conventions
 - Path alias `@/*` → `src/*`. Import db as `db` from `@/db`; Supabase SSR client from `@/utils/supabase/server`.
 - `src/middleware.ts` redirects unauthenticated `/dashboard/*` traffic to `/login`.
 - Domain layout: pages are async server components under `src/app/dashboard/<module>/` (housing, bookings, clients, invoices, purchase-orders, register). Mutations are `'use server'` actions in colocated `actions.ts` files (e.g. `src/app/dashboard/clients/actions.ts`): they parse `FormData`, validate with zod schemas in `src/lib/validations/`, run `db.transaction`, call `revalidatePath`, and return `ActionState` from `src/types/actions.ts`. Domain/scheduling logic lives in `src/lib/` (`scheduling/`, `invoicing/`, `integrations/pennylane.ts`).
+- **Every `'use server'` mutation starts with an access guard** from `src/lib/auth.ts` (`requireUser()`, or `requireRole('secretary'|'staff'|'owner')` per the role matrix in `PLAN.md`). Roles live in the `profiles` table (`id` = `auth.users.id`, no public FK). `dev`/`owner` are "boss" roles covering all permissions; `secretary` and `staff` are disjoint.
 
 ## Drizzle — API is newer than most training data
 - `drizzle-orm@1.0.0-rc`: relations use `defineRelations(...)` imported from `drizzle-orm` (`src/db/schema.ts:431`), **not** the legacy `relations()` helper.

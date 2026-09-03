@@ -1,17 +1,13 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { serverEnv } from '@/lib/env';
 
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      'Les variables d\'environnement NEXT_PUBLIC_SUPABASE_URL ou NEXT_PUBLIC_SUPABASE_ANON_KEY sont manquantes dans .env.local'
-    );
-  }
+  // Env validé centralement (Phase A5) : échec tôt si clé Supabase manquante.
+  const supabaseUrl = serverEnv.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = serverEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   return createServerClient(
     supabaseUrl,

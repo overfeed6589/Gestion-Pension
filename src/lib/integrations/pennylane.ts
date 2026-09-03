@@ -1,10 +1,15 @@
 import { db } from '@/db';
 import { invoices } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { serverEnv } from '@/lib/env';
 
 const PENNYLANE_API_URL = 'https://api.pennylane.com/v1';
 
 export async function syncInvoiceToPennylane(invoiceId: string) {
+  if (!serverEnv.PENNYLANE_API_KEY) {
+    throw new Error('PENNYLANE_API_KEY absente : synchronisation Pennylane impossible.');
+  }
+
   const invoice = await db.query.invoices.findFirst({
     where: {RAW: (t) => eq(invoices.id, invoiceId),},
     with: {
@@ -40,7 +45,7 @@ export async function syncInvoiceToPennylane(invoiceId: string) {
   const response = await fetch(`${PENNYLANE_API_URL}/customer_invoices`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${process.env.PENNYLANE_API_KEY}`,
+      'Authorization': `Bearer ${serverEnv.PENNYLANE_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),

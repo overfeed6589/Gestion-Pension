@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Seed des profils d'équipe (Phase A2).
  *
@@ -19,10 +18,12 @@ import postgres from 'postgres';
 
 dotenv.config({ path: '.env.local' });
 
+// Connexion en DIRECT (5432, rôle postgres) : le seed lit auth.users (schéma `auth`)
+// que le rôle applicatif app_user (Phase A4) ne doit PAS pouvoir lire.
 function getDbUrl(): string {
-  const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
+  const url = process.env.DIRECT_URL;
   if (!url) {
-    throw new Error('DATABASE_URL / DIRECT_URL absente de .env.local');
+    throw new Error('DIRECT_URL absente de .env.local (le seed doit passer par le rôle postgres)');
   }
   return url;
 }
