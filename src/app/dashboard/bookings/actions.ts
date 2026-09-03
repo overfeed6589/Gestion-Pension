@@ -5,6 +5,7 @@ import { db } from '@/db';
 import { bookings, bookingSegments, housingUnits } from '@/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { ActionState } from '@/types/actions';
+import { requireUser } from '@/lib/auth';
 
 interface Vaccine {
   name: string;
@@ -15,6 +16,9 @@ interface Vaccine {
  * Valide l'arrivée effective de l'animal (Check-in)
  */
 export async function checkInBookingAction(bookingId: string): Promise<ActionState> {
+  // Garde d'authentification (Phase A1) : toute action serveur doit être liée à une session.
+  await requireUser();
+
   try {
     await db.transaction(async (tx) => {
       // 1. Mettre à jour la réservation : statut et date réelle d'entrée
@@ -64,6 +68,8 @@ export async function checkInBookingAction(bookingId: string): Promise<ActionSta
  * Valide le départ effectif de l'animal (Check-out) et libère le box
  */
 export async function checkOutBookingAction(bookingId: string): Promise<ActionState> {
+  await requireUser();
+
   try {
     await db.transaction(async (tx) => {
       // 1. Mettre à jour la réservation : statut et date réelle de sortie
@@ -109,6 +115,9 @@ export async function checkOutBookingAction(bookingId: string): Promise<ActionSt
 
 //Registre des Entrées/Sorties
 export async function getLegalRegisterEntries(dateStr?: string) {
+  // Lecture de données personnelles : nécessite une session (Phase A1).
+  await requireUser();
+
   const targetDate = dateStr ? new Date(dateStr) : new Date();
 
   // On récupère les réservations qui couvrent cette période ou ont eu lieu

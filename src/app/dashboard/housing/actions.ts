@@ -5,11 +5,16 @@ import { db } from '@/db';
 import { housingCategories } from '@/db/schema';
 import { createCategorySchema } from '@/lib/validations/housing';
 import { ActionState } from '@/types/actions';
+import { requireUser } from '@/lib/auth';
 
 export async function createHousingCategoryAction(
   prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  // Garde d'authentification (Phase A1) : créer des catégories/tarifs est réservé
+  // aux utilisateurs connectés (le rôle précis sera appliqué en Phase A2).
+  await requireUser();
+
   // 1. Extraire les données du FormData
   const rawData = {
     name: formData.get('name'),

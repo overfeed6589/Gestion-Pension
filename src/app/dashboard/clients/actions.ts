@@ -5,20 +5,17 @@ import { db } from '@/db';
 import { clients, pets } from '@/db/schema';
 import { createClientWithPetSchema } from '@/lib/validations/client-pet';
 import { ActionState } from '@/types/actions';
-import { createClient } from '@/utils/supabase/server';
+import { requireUser } from '@/lib/auth';
 
 export async function createClientWithPetAction(
   prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  // 1. Authentification
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return { success: false, message: 'Non autorisé' };
-  }
+  // Garde d'authentification (Phase A1) : centralisée dans le helper, au lieu
+  // du contrôle Supabase inline (source unique, réutilisable).
+  await requireUser();
 
-  // 2. Parsing du payload complexe (les vaccins sont transmis en JSON stringifié)
+  // 1. Parsing du payload complexe (les vaccins sont transmis en JSON stringifié)
   let rawVaccines = [];
   try {
     const vaccinesJson = formData.get('pet.vaccines') as string;
@@ -51,7 +48,7 @@ export async function createClientWithPetAction(
     },
   };
 
-  // 3. Validation Zod
+  // 2. Validation Zod
   const validated = createClientWithPetSchema.safeParse(rawData);
 
   if (!validated.success) {
@@ -64,7 +61,7 @@ export async function createClientWithPetAction(
 
   const { pet, ...clientData } = validated.data;
 
-  // 4. Exécution atomique en BDD
+  // 3. Exécution atomique en BDD
   try {
     await db.transaction(async (tx) => {
       // Création du client

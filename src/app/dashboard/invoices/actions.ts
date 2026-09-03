@@ -6,13 +6,12 @@ import { bookings, invoices, invoiceItems } from '@/db/schema';
 import { generateNextInvoiceNumber } from '@/lib/invoicing/numbering';
 import { syncInvoiceToPennylane } from '@/lib/integrations/pennylane';
 import { eq } from 'drizzle-orm';
-import { createClient } from '@/utils/supabase/server';
 import { ActionState } from '@/types/actions';
+import { requireUser } from '@/lib/auth';
 
 export async function generateFinalInvoiceAction(bookingId: string): Promise<ActionState> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, message: 'Non autorisé' };
+  // Garde d'authentification (Phase A1) : génération de facture = écriture sensible.
+  await requireUser();
 
   try {
     const newInvoiceId = await db.transaction(async (tx) => {

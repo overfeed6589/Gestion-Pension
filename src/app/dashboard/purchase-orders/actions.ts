@@ -5,6 +5,7 @@ import { db } from '@/db';
 import { purchaseOrders, purchaseOrderItems } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { ActionState } from '@/types/actions';
+import { requireUser } from '@/lib/auth';
 
 interface OrderItemInput {
   description: string;
@@ -18,6 +19,10 @@ export async function createPurchaseOrderAction(data: {
   notes?: string;
   items: OrderItemInput[];
 }): Promise<ActionState> {
+  // Garde d'authentification (Phase A1) : les commandes fournisseurs n'avaient
+  // aucun contrôle d'accès.
+  await requireUser();
+
   try {
     return await db.transaction(async (tx) => {
       const orderNumber = `CMD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -62,6 +67,8 @@ export async function markOrderAsReceivedAction(
   orderId: string, 
   receivedDate: Date = new Date()
 ): Promise<ActionState> {
+  await requireUser();
+
   try {
     await db
       .update(purchaseOrders)
