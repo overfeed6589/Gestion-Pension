@@ -47,9 +47,11 @@ Règles :
 
 - **A1 (fait)** Helper `src/lib/auth.ts` : `requireUser()` ; garde d'authentification
   ajoutée sur toutes les server actions (certaines n'en avaient aucune).
-- **A2** Table `profiles` (`id → auth.users.id`, `role`, `full_name`, `is_active`,
-  `created_at`) + relations Drizzle ; `requireRole`/`requireRoleStrict` ; gardes par
-  module (matrice ci-dessus) + masquage UI ; seed des 5 comptes.
+- **A2 (code fait — en attente push DB + seed)** Table `profiles` (`id → auth.users.id`,
+  `role`, `full_name`, `is_active`, `created_at`) + `requireRole`/`requireRoleStrict`
+  dans `src/lib/auth.ts` (`canAccess`, boss dev/owner) ; gardes par module appliquées
+  sur toutes les actions selon la matrice ; masquage UI des boutons check-in/check-out
+  sur `/dashboard/register` ; seed : `scripts/seed-profiles.ts`.
 - **A3** Console Supabase : désactiver les inscriptions publiques (risque actuel :
   un compte auto-enregistré passerait les gardes `user != null`), confirmation email,
   MFA/TOTP pour owner/dev, captcha login ; retirer les clés inutilisées de `.env.local`.

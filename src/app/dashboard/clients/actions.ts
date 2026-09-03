@@ -5,15 +5,15 @@ import { db } from '@/db';
 import { clients, pets } from '@/db/schema';
 import { createClientWithPetSchema } from '@/lib/validations/client-pet';
 import { ActionState } from '@/types/actions';
-import { requireUser } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 
 export async function createClientWithPetAction(
   prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  // Garde d'authentification (Phase A1) : centralisée dans le helper, au lieu
-  // du contrôle Supabase inline (source unique, réutilisable).
-  await requireUser();
+  // Garde d'autorisation (A2) : la création de dossier client (dépôt) revient au
+  // rôle `secretary` (dev/owner couverts). `staff` modifie la fiche animal ensuite.
+  await requireRole('secretary');
 
   // 1. Parsing du payload complexe (les vaccins sont transmis en JSON stringifié)
   let rawVaccines = [];

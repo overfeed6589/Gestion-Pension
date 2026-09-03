@@ -5,7 +5,7 @@ import { bookingSegments } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { isHousingUnitAvailable } from '@/lib/scheduling/checker';
 import { ActionState } from '@/types/actions';
-import { requireUser } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 
 interface AssignUnitInput {
   bookingId: string;
@@ -19,8 +19,8 @@ interface AssignUnitInput {
  * Assigne un box à un segment de réservation après vérification stricte des conflits
  */
 export async function assignUnitToBookingSegment(input: AssignUnitInput): Promise<ActionState> {
-  // Garde d'authentification (Phase A1).
-  await requireUser();
+  // Garde d'autorisation (A2) : l'attribution de box (planning) est réservée au rôle `staff`.
+  await requireRole('staff');
 
   try {
     // 1. Vérifier la disponibilité réelle du box sur la période

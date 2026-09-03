@@ -1,7 +1,16 @@
 import { db } from '@/db';
 import { checkInBookingAction, checkOutBookingAction } from '@/app/dashboard/bookings/actions';
+import { getCurrentProfile, canAccess } from '@/lib/auth';
 
 export default async function WeeklyRegisterPage() {
+  // Profil courant pour le masquage UI (A2) : les boutons check-in/check-out ne
+  // sont affichés qu'aux rôles habilités (`staff`, couvert par dev/owner).
+  // La sécurité repose sur les gardes `requireRole` des actions, pas sur ce masquage.
+  const currentProfile = await getCurrentProfile();
+  const canManageMouvements = currentProfile
+    ? canAccess(currentProfile.role, ['staff'])
+    : false;
+
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
 
@@ -86,11 +95,13 @@ export default async function WeeklyRegisterPage() {
                         <p className="font-medium">{petsList || 'Animal'}</p>
                         <p className="text-xs text-muted-foreground">{booking.client?.firstName} {booking.client?.lastName} • <span className="font-semibold text-amber-600">{unitName}</span></p>
                       </div>
-                      <form action={async () => { 'use server'; await checkInBookingAction(booking.id); }}>
-                        <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium py-1.5 px-3 rounded transition">
-                          Check-in
-                        </button>
-                      </form>
+                      {canManageMouvements && (
+                        <form action={async () => { 'use server'; await checkInBookingAction(booking.id); }}>
+                          <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium py-1.5 px-3 rounded transition">
+                            Check-in
+                          </button>
+                        </form>
+                      )}
                     </div>
                   );
                 })
@@ -116,11 +127,13 @@ export default async function WeeklyRegisterPage() {
                         <p className="font-medium">{petsList}</p>
                         <p className="text-xs text-muted-foreground">{booking.client?.firstName} {booking.client?.lastName} • <span className="font-semibold text-blue-600">{unitName}</span></p>
                       </div>
-                      <form action={async () => { 'use server'; await checkOutBookingAction(booking.id); }}>
-                        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-1.5 px-3 rounded transition">
-                          Check-out
-                        </button>
-                      </form>
+                      {canManageMouvements && (
+                        <form action={async () => { 'use server'; await checkOutBookingAction(booking.id); }}>
+                          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-1.5 px-3 rounded transition">
+                            Check-out
+                          </button>
+                        </form>
+                      )}
                     </div>
                   );
                 })

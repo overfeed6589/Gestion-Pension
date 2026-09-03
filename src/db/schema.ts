@@ -109,6 +109,29 @@ export type PaymentMethod = typeof PAYMENT_METHODS[number];
 export type PaymentTransactionStatus = typeof PAYMENT_TRANSACTION_STATUSES[number];
 export type BillingType = typeof BILLING_TYPES[number];
 
+// ==========================================
+// 1bis. RÔLES & PROFILS (contrôle d'accès — Phase A2)
+// ==========================================
+// Hiérarchie (matrice PLAN.md) :
+//   dev/owner = accès complet ; secretary et staff sont disjoints mais couverts par dev/owner.
+//   Ces valeurs sont aussi utilisées par src/lib/auth.ts (requireRole) et le masquage UI.
+export const PROFILE_ROLES = ['dev', 'owner', 'secretary', 'staff'] as const;
+export type ProfileRole = (typeof PROFILE_ROLES)[number];
+
+// Table des profils : 1 ligne par utilisateur Supabase Auth (auth.users).
+// Raisons :
+//  - auth.users vit dans le schéma `auth`, hors de `public` : on ne peut pas y mettre
+//    de colonnes métier ni la référencer par une FK publique propre.
+//  - profiles.id = auth.users.id : lien 1:1 établi à l'application (voir scripts/seed-profiles.ts).
+export const profiles = pgTable('profiles', {
+  id: uuid('id').primaryKey(), // = auth.users.id (Supabase), sans FK vers le schéma auth
+  role: text('role', { enum: PROFILE_ROLES }).notNull(),
+  fullName: text('full_name'),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Type structurel pour les vaccins (Option B JSONB)
 export type VaccineRecord = {
   name: string;             // Ex: "Toux de chenil", "CHPL", "Rage"

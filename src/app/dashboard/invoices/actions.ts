@@ -7,11 +7,12 @@ import { generateNextInvoiceNumber } from '@/lib/invoicing/numbering';
 import { syncInvoiceToPennylane } from '@/lib/integrations/pennylane';
 import { eq } from 'drizzle-orm';
 import { ActionState } from '@/types/actions';
-import { requireUser } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 
 export async function generateFinalInvoiceAction(bookingId: string): Promise<ActionState> {
-  // Garde d'authentification (Phase A1) : génération de facture = écriture sensible.
-  await requireUser();
+  // Garde d'autorisation (A2) : la facturation est du ressort de `secretary`
+  // (dev/owner couverts). Génération de facture = écriture sensible.
+  await requireRole('secretary');
 
   try {
     const newInvoiceId = await db.transaction(async (tx) => {
