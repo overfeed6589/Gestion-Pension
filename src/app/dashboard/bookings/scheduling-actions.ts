@@ -9,15 +9,13 @@ interface AssignUnitInput {
   bookingId: string;
   segmentId: string;
   unitId: string;
-  checkInDate: Date;
-  checkOutDate: Date;
 }
 
 /**
  * Assigne un box à un segment de réservation après vérification stricte des conflits.
- * La logique (transaction + verrou + re-vérification) vit dans
- * src/lib/scheduling/allocation.ts — ce fichier ne fait que la garde d'accès et
- * la traduction du résultat en ActionState.
+ * La logique (transaction + verrou + re-vérification sur les dates stockées du
+ * segment) vit dans src/lib/scheduling/allocation.ts — ce fichier ne fait que la
+ * garde d'accès et la traduction du résultat en ActionState.
  */
 export async function assignUnitToBookingSegment(input: AssignUnitInput): Promise<ActionState> {
   // Garde d'autorisation (A2) : l'attribution de box (planning) est réservée au rôle `staff`.
@@ -27,8 +25,6 @@ export async function assignUnitToBookingSegment(input: AssignUnitInput): Promis
     bookingId: input.bookingId,
     segmentId: input.segmentId,
     unitId: input.unitId,
-    startDate: input.checkInDate,
-    endDate: input.checkOutDate,
   });
 
   if (!result.ok) {

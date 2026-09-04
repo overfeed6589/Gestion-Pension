@@ -13,6 +13,9 @@ import { and, eq, ne, sql } from 'drizzle-orm';
 //  - Ici les chevauchements sont calculés en SQL (une seule requête) et on
 //    respecte une sémantique de séjour par nuit [start, end) : deux séjours se
 //    chevauchent ssi `existing.start < end && existing.end > start`.
+//  - Correctif review (B3/B4) : la fin effective d'un séjour tient compte du
+//    départ réel — `COALESCE(actual_check_out, segment.end_date)` — pour libérer
+//    l'unité dès qu'un animal est réellement sorti (départ anticipé).
 //  - Ces fonctions sont READ-ONLY (pré-visualisation UI / planning). Les
 //    écritures atomiques vivent dans allocation.ts (verrou + re-vérification).
 // ---------------------------------------------------------------------------
@@ -63,7 +66,7 @@ export async function getUnitSegmentOverlaps(
         ne(bookings.status, 'cancelled'),
         excludeSegmentId ? ne(bookingSegments.id, excludeSegmentId) : undefined,
         sql`${bookingSegments.startDate} < ${endStr}::date`,
-        sql`${bookingSegments.endDate} > ${startStr}::date`
+        sql`COALESCE(${bookings.actualCheckOut}::date, ${bookingSegments.endDate}) > ${startStr}::date`
       )
     );
 

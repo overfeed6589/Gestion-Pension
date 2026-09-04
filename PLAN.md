@@ -75,11 +75,19 @@ Règles :
   (verrou `FOR UPDATE` sur l'unité + re-vérification en transaction) pour
   `assignUnitToSegment` et `createBookingSegment` ; `scheduling-actions.ts` réduite
   à une couche action (garde `staff` + traduction en `ActionState`).
+  Correctif review : le chevauchement de `assignUnitToSegment` est vérifié sur les
+  **dates stockées** du segment (lues sous verrou), plus catch `23P01`/`23505` →
+  « box occupé » au lieu d'une erreur 500.
 - **B2 (script prêt — à exécuter)** `npm run db:constraints`
   (`scripts/apply-constraints.ts`, en DIRECT/5432, idempotent) : extension
   `btree_gist` + contrainte `booking_segments_no_overlap`
   (`EXCLUDE USING gist` sur unit_id + `daterange`), garantie DB en cas d'accès
   concurrent ou d'écriture hors code applicatif. Préflight des doublons existants.
+- **B3 (fait)** `occupancy.ts` réécrit : occupation **dérivée des segments** en SQL
+  (aucune dépendance au booléen `is_available`, réservé au « hors service » manuel).
+- **B4 (partiel)** Fin effective d'un séjour = `COALESCE(actual_check_out, end_date)`
+  dans checker/allocation/occupancy → un départ réel (anticipé) libère l'unité.
+  Reste : auteur sur check-in/out (Phase C) et numérotation robuste (B5).
 - **B3** Occupation des unités dérivée des segments + `housing_blocks` (le booléen
   `is_available` n'est plus la source de vérité).
 - **B4** Mutations check-in/check-out dans une transaction unique, avec auteur.
