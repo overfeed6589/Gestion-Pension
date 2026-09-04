@@ -52,9 +52,11 @@ Règles :
   dans `src/lib/auth.ts` (`canAccess`, boss dev/owner) ; gardes par module appliquées
   sur toutes les actions selon la matrice ; masquage UI des boutons check-in/check-out
   sur `/dashboard/register` ; seed : `scripts/seed-profiles.ts`.
-- **A3** Console Supabase : désactiver les inscriptions publiques (risque actuel :
-  un compte auto-enregistré passerait les gardes `user != null`), confirmation email,
-  MFA/TOTP pour owner/dev, captcha login ; retirer les clés inutilisées de `.env.local`.
+- **A3 (code fait — actions console à faire)** Durcissement cookies de session
+  (`httpOnly`/`sameSite=lax`/`secure` prod) dans `middleware.ts` + `server.ts` ;
+  clés Supabase inutilisées retirées de `.env.local` (idem à faire côté Vercel).
+  Checklist console Supabase : `docs/securite-supabase.md` (désactiver l'auto-inscription,
+  confirmation email, politique mot de passe, captcha/MFA, vérif finale).
 - **A4 (code fait — à exécuter)** Moindre privilège DB : `scripts/apply-grants.ts`
   (`npm run db:grants`, en DIRECT/5432) crée le rôle `app_user` + droits CRUD sur
   `public` (tables, séquences, défauts pour les futures migrations) et retire le

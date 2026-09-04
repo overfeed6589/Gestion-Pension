@@ -1,6 +1,17 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+// Durcissement cookies de session (Phase A3) : même politique que côté serveur
+// (httpOnly + sameSite=lax, secure en production). Le middleware est le point de
+// rafraîchissement des cookies, il doit appliquer la même politique.
+function cookieSecurityOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+  };
+}
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -16,7 +27,10 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, {
+              ...cookieSecurityOptions(),
+              ...options,
+            })
           );
         },
       },
