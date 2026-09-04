@@ -31,8 +31,8 @@ function getDbUrl(): string {
 // TODO: remplacer par les vrais comptes Supabase Auth de l'équipe.
 // `dev` ne doit PAS être provisionné en production (accès complet réservé au code).
 const EMAILS_TO_ROLES: Array<{ email: string; role: 'dev' | 'owner' | 'secretary' | 'staff'; fullName: string }> = [
-  // { email: 'gerant@pension.fr', role: 'owner', fullName: 'Gérant' },
-  // { email: 'secretaire@pension.fr', role: 'secretary', fullName: 'Secrétaire' },
+  { email: 'direction@chat-s-amuse.com', role: 'owner', fullName: 'Gérant' },
+  { email: 'pension@chat-s-amuse.com', role: 'secretary', fullName: 'Secrétaire' },
   // { email: 'staff1@pension.fr', role: 'staff', fullName: 'Employé 1' },
   // { email: 'staff2@pension.fr', role: 'staff', fullName: 'Employé 2' },
 ];
