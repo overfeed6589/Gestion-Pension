@@ -69,11 +69,17 @@ Règles :
 
 ## Phase B — Intégrité des données & concurrence (anti double-réservation)
 
-- **B1** Réécrire `lib/scheduling/` : vérif de chevauchement en SQL (1 requête,
-  overlap + statut ≠ cancelled + exclusion du segment courant) ; allocation dans une
-  transaction.
-- **B2** Contrainte d'exclusion DB (`btree_gist` + `EXCLUDE USING gist` sur
-  `booking_segments.unit_id`/dates) = garantie en cas d'accès concurrent.
+- **B1 (fait)** Réécriture `lib/scheduling/` : `checker.ts` = disponibilité en SQL
+  (chevauchement [start,end) + statut ≠ cancelled + exclusion du segment courant,
+  maintenance `housing_blocks` incluse) ; `allocation.ts` = opérations atomiques
+  (verrou `FOR UPDATE` sur l'unité + re-vérification en transaction) pour
+  `assignUnitToSegment` et `createBookingSegment` ; `scheduling-actions.ts` réduite
+  à une couche action (garde `staff` + traduction en `ActionState`).
+- **B2 (script prêt — à exécuter)** `npm run db:constraints`
+  (`scripts/apply-constraints.ts`, en DIRECT/5432, idempotent) : extension
+  `btree_gist` + contrainte `booking_segments_no_overlap`
+  (`EXCLUDE USING gist` sur unit_id + `daterange`), garantie DB en cas d'accès
+  concurrent ou d'écriture hors code applicatif. Préflight des doublons existants.
 - **B3** Occupation des unités dérivée des segments + `housing_blocks` (le booléen
   `is_available` n'est plus la source de vérité).
 - **B4** Mutations check-in/check-out dans une transaction unique, avec auteur.

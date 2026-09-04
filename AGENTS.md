@@ -24,6 +24,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - `npm run dev` / `npm run build` / `npm run lint` (= `eslint`, flat config). **No test suite, no CI** — typecheck via `npm run typecheck` (= `npx tsc --noEmit`).
 - DB admin scripts (run as `postgres` via `DIRECT_URL`, port 5432 — NOT the pooler):
   `npm run db:grants` (`scripts/apply-grants.ts`, creates least-privilege role `app_user`),
+  `npm run db:constraints` (`scripts/apply-constraints.ts`, anti double-booking exclusion constraint on `booking_segments`),
   `npm run seed:profiles` (`scripts/seed-profiles.ts`, maps Supabase auth emails → `profiles` rows).
 - Env comes from `.env.local` (gitignored). `drizzle.config.ts` loads it via `dotenv.config({ path: '.env.local' })` and uses `DIRECT_URL || DATABASE_URL`.
 - Runtime server env is validated once through `serverEnv` in `src/lib/env.ts` (zod, fails fast) — import it instead of reading `process.env` ad hoc; never import it from a client component.

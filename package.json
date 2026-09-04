@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:grants": "tsx scripts/apply-grants.ts",
+    "db:constraints": "tsx scripts/apply-constraints.ts",
     "seed:profiles": "tsx scripts/seed-profiles.ts"
   },
   "dependencies": {
