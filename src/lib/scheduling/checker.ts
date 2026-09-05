@@ -63,7 +63,8 @@ export async function getUnitSegmentOverlaps(
     .where(
       and(
         eq(bookingSegments.unitId, unitId),
-        ne(bookings.status, 'cancelled'),
+        // Seuls `cancelled` et `expired` libèrent l'unité (offres non honorées).
+        sql`${bookings.status} not in ('cancelled', 'expired')`,
         excludeSegmentId ? ne(bookingSegments.id, excludeSegmentId) : undefined,
         sql`${bookingSegments.startDate} < ${endStr}::date`,
         sql`COALESCE(${bookings.actualCheckOut}::date, ${bookingSegments.endDate}) > ${startStr}::date`

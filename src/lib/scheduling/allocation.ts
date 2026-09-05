@@ -57,7 +57,8 @@ async function findConflictInUnit(
     .where(
       and(
         eq(bookingSegments.unitId, unitId),
-        ne(bookings.status, 'cancelled'),
+        // `cancelled` / `expired` ne bloquent pas l'unité.
+        sql`${bookings.status} not in ('cancelled', 'expired')`,
         excludeSegmentId ? ne(bookingSegments.id, excludeSegmentId) : undefined,
         sql`${bookingSegments.startDate} < ${endStr}::date`,
         sql`COALESCE(${bookings.actualCheckOut}::date, ${bookingSegments.endDate}) > ${startStr}::date`
@@ -219,10 +220,16 @@ async function pickAndLockFreeUnit(
 }
 
 /**
- * Crée un segment de séjour (période + catégorie) et, si autoAssign, lui
- * attribue atomiquement une unité libre.
+ * Crée un segment DANS une transaction fournie (version transactionnelle,
+ * utilisée par les flux qui regroupent plusieurs écritures — Phase G).
+ * Ne pose pas de transaction : l'appelant doit déjà être dans `db.transaction`.
+ * Lève en cas de violation de contrainte (à traduire par l'appelant) sauf cas
+ * de conflit détecté préalablement qui est renvoyé proprement.
  */
-export async function createBookingSegment(input: CreateSegmentInput): Promise<CreateSegmentResult> {
+export async function createBookingSegmentTx(
+  tx: Tx,
+  input: CreateSegmentInput
+): Promise<CreateSegmentResult> {
   const startStr = toDateString(input.checkInDate);
   const endStr = toDateString(input.checkOutDate);
 
@@ -230,31 +237,37 @@ export async function createBookingSegment(input: CreateSegmentInput): Promise<C
     return { ok: false, code: 'invalid_range', message: 'La date de sortie doit être postérieure à la date d’entrée.' };
   }
 
+  let unitId: string | null = null;
+
+  if (input.autoAssign) {
+    unitId = await pickAndLockFreeUnit(tx, input.categoryId, startStr, endStr);
+    if (!unitId) {
+      return { ok: false, code: 'no_unit_available', message: 'Aucune unité disponible dans cette catégorie sur cette période.' } as CreateSegmentResult;
+    }
+  }
+
+  const [newSegment] = await tx
+    .insert(bookingSegments)
+    .values({
+      bookingId: input.bookingId,
+      categoryId: input.categoryId,
+      unitId,
+      startDate: startStr,
+      endDate: endStr,
+      segmentPrice: input.segmentPrice,
+    })
+    .returning({ id: bookingSegments.id });
+
+  return { ok: true, segmentId: newSegment.id, unitId };
+}
+
+/**
+ * Crée un segment de séjour (période + catégorie) et, si autoAssign, lui
+ * attribue atomiquement une unité libre. Wrapper autonome (propre transaction).
+ */
+export async function createBookingSegment(input: CreateSegmentInput): Promise<CreateSegmentResult> {
   try {
-    return await db.transaction(async (tx) => {
-      let unitId: string | null = null;
-
-      if (input.autoAssign) {
-        unitId = await pickAndLockFreeUnit(tx, input.categoryId, startStr, endStr);
-        if (!unitId) {
-          return { ok: false, code: 'no_unit_available', message: 'Aucune unité disponible dans cette catégorie sur cette période.' } as CreateSegmentResult;
-        }
-      }
-
-      const [newSegment] = await tx
-        .insert(bookingSegments)
-        .values({
-          bookingId: input.bookingId,
-          categoryId: input.categoryId,
-          unitId,
-          startDate: startStr,
-          endDate: endStr,
-          segmentPrice: input.segmentPrice,
-        })
-        .returning({ id: bookingSegments.id });
-
-      return { ok: true, segmentId: newSegment.id, unitId };
-    });
+    return await db.transaction(async (tx) => createBookingSegmentTx(tx, input));
   } catch (err) {
     if (isConstraintViolation(err)) {
       return { ok: false, code: 'conflict', message: 'Conflit détecté : le box vient d’être réservé par un autre gestionnaire.' };

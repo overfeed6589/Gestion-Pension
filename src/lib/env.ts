@@ -40,6 +40,10 @@ const serverEnvSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1, 'STRIPE_WEBHOOK_SECRET manquante').optional(),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
 
+  // URL publique de l'app (liens de paiement / emails). Facultatif : repli sur
+  // localhost en dev et l'URL Vercel en production.
+  NEXT_PUBLIC_SITE_URL: z.string().url('NEXT_PUBLIC_SITE_URL invalide').optional(),
+
   // Email sortant (Resend — Phase G it1) : optionnel en dev, requis en prod
   // pour l'envoi des offres / relances.
   RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY manquante').optional(),

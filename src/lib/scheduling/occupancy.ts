@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { bookings, bookingSegments, housingCategories, housingUnits } from '@/db/schema';
-import { and, eq, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { toDateString } from './checker';
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,8 @@ async function getOccupiedUnitIdsForDate(dateStr: string): Promise<Set<string>> 
     .where(
       and(
         isNotNull(bookingSegments.unitId),
-        ne(bookings.status, 'cancelled'),
+        // `cancelled` / `expired` ne comptent pas comme occupés.
+        sql`${bookings.status} not in ('cancelled', 'expired')`,
         sql`${bookingSegments.startDate} <= ${dateStr}::date`,
         sql`COALESCE(${bookings.actualCheckOut}::date, ${bookingSegments.endDate}) > ${dateStr}::date`
       )
