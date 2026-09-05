@@ -1,79 +1,91 @@
-// src/app/dashboard/housing/page.tsx
 import { db } from '@/db';
+import { requireRole } from '@/lib/auth';
+import { getUnitOccupancyForDate } from '@/lib/scheduling/occupancy';
+import { CategoryForm } from '@/components/housing/CategoryForm';
+import { UnitForm } from '@/components/housing/UnitForm';
+import { formatCents } from '@/lib/money';
+
+export const dynamic = 'force-dynamic';
 
 export default async function HousingManagementPage() {
-  const categories = await db.query.housingCategories.findMany({
-    with: {
-      units: true,
-    },
-  });
+  await requireRole('secretary');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [categories, occupancy] = await Promise.all([
+    db.query.housingCategories.findMany({ with: { units: true } }),
+    getUnitOccupancyForDate(today),
+  ]);
+  const occupiedIds = new Set(occupancy.filter((u) => u.occupied).map((u) => u.unitId));
 
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Parc de Logements & Box</h1>
-        <p className="text-muted-foreground">
-          Visualisez en temps réel l’occupation et la disponibilité de chaque box de la pension.
+        <h1 className="text-2xl font-bold tracking-tight">Parc de logements & box</h1>
+        <p className="text-slate-500">
+          Définissez vos espaces (catégorie, capacité, tarifs), puis ajoutez les box physiques.
+          L’occupation affichée est dérivée des réservations du jour.
         </p>
       </div>
 
-      <div className="space-y-6">
-        {categories.length === 0 ? (
-          <div className="bg-card border rounded-xl p-6 text-center text-muted-foreground italic">
-            Aucune catégorie de logement configurée pour l’instant.
-          </div>
-        ) : (
-          categories.map((category) => (
-            <div key={category.id} className="bg-card border rounded-xl p-6 space-y-4 shadow-sm">
-              <div className="flex items-center justify-between border-b pb-3">
-                <div>
-                  <h2 className="font-semibold text-lg">{category.name}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Tarif de base : {(category.basePricePerNight / 100).toFixed(2)} € / jour
-                  </p>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-1">
+          <CategoryForm />
+        </div>
+
+        <div className="lg:col-span-3 space-y-6">
+          {categories.length === 0 ? (
+            <p className="text-sm text-slate-500 italic bg-white border rounded-xl p-6">
+              Aucun espace configuré pour l’instant.
+            </p>
+          ) : (
+            categories.map((category) => (
+              <div key={category.id} className="bg-white border rounded-xl p-5 space-y-3 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+                  <div>
+                    <h2 className="font-semibold text-lg">
+                      {category.name}{' '}
+                      {category.isPublic && (
+                        <span className="text-[10px] uppercase tracking-wide bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full align-middle">
+                          Public
+                        </span>
+                      )}
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Capacité {category.capacity} • {formatCents(category.basePricePerNight)}/nuit
+                      {category.surchargePerAnimal > 0
+                        ? ` • +${formatCents(category.surchargePerAnimal)}/animal supplémentaire`
+                        : ''}
+                    </p>
+                  </div>
+                  <UnitForm categoryId={category.id} />
                 </div>
-                <span className="text-xs bg-muted px-3 py-1 rounded-full font-medium">
-                  {category.units.length} unité{category.units.length > 1 ? 's' : ''} au total
-                </span>
-              </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {category.units.map((unit) => {
-                  const isFree = unit.isAvailable;
-
-                  return (
-                    <div
-                      key={unit.id}
-                      className={`border rounded-lg p-3 flex flex-col justify-between space-y-3 transition-all ${
-                        isFree
-                          ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900'
-                          : 'bg-rose-50/50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                  {category.units.length === 0 && (
+                    <p className="text-xs text-slate-400 italic col-span-full">
+                      Aucun box : ajoutez-en pour pouvoir attribuer les séjours.
+                    </p>
+                  )}
+                  {category.units.map((unit) => {
+                    const horsService = !unit.isAvailable;
+                    const occupied = !horsService && occupiedIds.has(unit.id);
+                    const badge = horsService ? 'bg-red-50 text-red-700 border-red-200' : occupied ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    const label = horsService ? 'Hors service' : occupied ? 'Occupé aujourd’hui' : 'Libre';
+                    return (
+                      <div
+                        key={unit.id}
+                        className={`border rounded-lg p-3 flex flex-col justify-between space-y-3 ${badge}`}
+                      >
                         <span className="font-bold text-sm">{unit.name}</span>
-                        <span
-                          className={`inline-block w-2.5 h-2.5 rounded-full ${
-                            isFree ? 'bg-emerald-500' : 'bg-rose-500'
-                          }`}
-                          title={isFree ? 'Disponible' : 'Occupé'}
-                        />
+                        <span className="text-[11px] font-semibold">{label}</span>
                       </div>
-
-                      <div className="flex items-center justify-between text-[11px] pt-2 border-t border-border/50">
-                        {isFree ? (
-                          <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Libre</span>
-                        ) : (
-                          <span className="text-rose-700 dark:text-rose-400 font-semibold">Occupé</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
