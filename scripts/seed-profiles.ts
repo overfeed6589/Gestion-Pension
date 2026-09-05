@@ -33,7 +33,7 @@ function getDbUrl(): string {
 const EMAILS_TO_ROLES: Array<{ email: string; role: 'dev' | 'owner' | 'secretary' | 'staff'; fullName: string }> = [
   { email: 'direction@chat-s-amuse.com', role: 'owner', fullName: 'Gérant' },
   { email: 'pension@chat-s-amuse.com', role: 'secretary', fullName: 'Secrétaire' },
-  // { email: 'staff1@pension.fr', role: 'staff', fullName: 'Employé 1' },
+  { email: 'staff1@chat-s-amuse.com', role: 'staff', fullName: 'Employé 1' },
   // { email: 'staff2@pension.fr', role: 'staff', fullName: 'Employé 2' },
 ];
 
