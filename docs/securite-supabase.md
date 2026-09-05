@@ -1,11 +1,17 @@
 # Durcissement Supabase — checklist manuelle (Phase A3)
 
 La partie **codable** (durcissement cookies de session) est déjà en place :
-`src/middleware.ts` et `src/utils/supabase/server.ts` imposent
+`src/proxy.ts` et `src/utils/supabase/server.ts` imposent
 `httpOnly + sameSite=lax + secure (prod)` sur les cookies de session.
 
 Ce qui suit se fait dans le **dashboard Supabase** et dans les variables
 d'environnement (Vercel + `.env.local`). Rien d'ici n'est automatisable via le repo.
+
+> **Limites du plan Gratuit (constatées en console)** : certains garde-fous
+> (CAPTCHA hCaptcha/Cloudflare Turnstile, MFA par SMS, Auth Hooks type
+> « Send Email ») ne sont **pas disponibles** sur le plan Gratuit. On applique
+> donc les alternatives gratuites ci-dessous et on notera ce qui devra être
+> activé lors d'un passage sur un plan payant.
 
 ---
 
@@ -19,6 +25,10 @@ manuellement par l'équipe.
   - désactiver **« Allow new users to sign up »** ;
   - activer **« Confirm email »** (obligatoire pour tout nouveau compte).
 
+Personnalisation des emails : sur plan Gratuit, les **Auth Hooks (Send Email)
+ne sont pas disponibles** ; on reste sur les **templates intégrés** (Authentication →
+Emails) + éventuellement un **Custom SMTP** (gratuit) pour l'envoi depuis ton domaine.
+
 ## 2. Politique de mot de passe
 
 - Supabase → **Authentication → Security** (ou selon version : `Security > Advanced`) :
@@ -27,19 +37,20 @@ manuellement par l'équipe.
 
 ## 3. Brute-force sur /login
 
-- Activer un **CAPTCHA** (Supabase → `Auth Hooks`/`Security` → hCaptcha) si souhaité.
-  ⚠️ Cela impose de passer un `captchaToken` dans `signInWithPassword`
-  (`src/app/login/action.ts`) — TODO code si activé.
-- Alternative acceptable pour 5 comptes : mots de passe forts + MFA (ci-dessous).
+- Le **CAPTCHA** (hCaptcha/Cloudflare Turnstile) n'est **pas disponible en plan
+  Gratuit**. → Compenser par : mots de passe forts (≥ 12), comptes créés
+  manuellement uniquement, et **MFA TOTP** ci-dessous.
+  ⚠️ Si un CAPTCHA est activé plus tard (plan payant), il faudra passer un
+  `captchaToken` dans `signInWithPassword` (`src/app/login/action.ts`) — TODO code.
 
 ## 4. MFA / 2FA (recommandé pour `dev`/`owner`)
 
-- Supabase → **Authentication → Advanced / Security** : activer **MFA (TOTP)**.
-- ⚠️ Supabase ne propose pas d'administration de l'enrôlement : chaque utilisateur
-  s'enrôle via une UI applicative. Sans écran MFA dans l'app, on ne peut pas le
-  **rendre obligatoire** aujourd'hui. Deux options :
+- **MFA par SMS/phone** : payant → non activé en Gratuit.
+- **MFA TOTP** : disponible en Gratuit, mais l'enrôlement exige une **UI
+  applicative** (Supabase n'a pas d'administration d'enrôlement). Aujourd'hui :
   1. différer (TODO : écran d'enrôlement TOTP côté app), ou
-  2. se reposer sur mots de passe forts + session courte.
+  2. se reposer sur mots de passe forts + comptes à accès restreint + 2FA sur le
+     **compte admin Supabase lui-même** (obligatoire, gratuit).
 
 ## 5. Session & cookies
 
