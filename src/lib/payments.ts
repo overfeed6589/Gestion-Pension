@@ -5,6 +5,7 @@ import { generateBookingInvoice } from '@/lib/invoicing/generate';
 import { refundPaymentIntent } from '@/lib/integrations/stripe';
 import { getPensionSettings } from '@/lib/settings';
 import { logAudit } from '@/lib/audit';
+import { shouldRefundDeposit } from '@/lib/refund-policy';
 
 // ---------------------------------------------------------------------------
 // Cycle de vie financier d'un séjour (Phase G3/G4)
@@ -133,12 +134,13 @@ export async function cancelBooking(
       }
 
       const now = Date.now();
-      const arrival = new Date(booking.checkInDate).getTime();
-      const daysBeforeArrival = Math.floor((arrival - now) / 86_400_000);
-      mustRefund =
-        booking.status === 'confirmed' &&
-        daysBeforeArrival >= settings.cancellationRefundDays &&
-        booking.depositAmount > 0;
+      mustRefund = shouldRefundDeposit({
+        status: booking.status,
+        checkInDate: booking.checkInDate,
+        now: new Date(now),
+        depositAmount: booking.depositAmount,
+        refundDays: settings.cancellationRefundDays,
+      });
 
       await tx
         .update(bookings)

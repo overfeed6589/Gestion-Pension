@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { generateNextInvoiceNumber } from './numbering';
 import { computeNights } from '@/lib/money';
+import { splitTtc } from '@/lib/invoicing/ttc';
 
 // ---------------------------------------------------------------------------
 // Génération de facture depuis un séjour (Phase G4)
@@ -26,12 +27,6 @@ export type BookingInvoiceType = 'deposit' | 'final';
 export type GenerateInvoiceResult =
   | { ok: true; invoiceId: string; created: boolean; message?: string }
   | { ok: false; message: string };
-
-/** Décompose un montant TTC en (HT, TVA) au taux donné (en point de base). */
-function splitTtc(ttcCents: number, vatRateBp: number): { subtotal: number; tax: number } {
-  const tax = Math.round((ttcCents * vatRateBp) / (vatRateBp + 10000));
-  return { subtotal: ttcCents - tax, tax };
-}
 
 /** Charge le booking avec segments (pets + catégorie) et prestations, en verrou. */
 async function loadBookingForInvoice(tx: Tx, bookingId: string) {
