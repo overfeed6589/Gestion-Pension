@@ -17,13 +17,19 @@ export function getStripe(): Stripe | null {
   return new Stripe(serverEnv.STRIPE_SECRET_KEY);
 }
 
-/** URL de base de l'app pour les redirections Stripe (success/cancel). */
+/**
+ * URL de base de l'app pour les redirections Stripe (success/cancel) et les
+ * emails. En production Vercel, on PRÉFÈRE `VERCEL_PROJECT_PRODUCTION_URL` :
+ * c'est le domaine de production STABLE du projet (l'URL ne change pas à chaque
+ * commit/preview, contrairement à `VERCEL_URL`). `NEXT_PUBLIC_SITE_URL` n'est
+ * qu'un repli (utile hors Vercel ou pour un domaine personnalisé).
+ */
 export function appBaseUrl(): string {
-  if (serverEnv.NEXT_PUBLIC_SITE_URL) return serverEnv.NEXT_PUBLIC_SITE_URL;
   if (process.env.NODE_ENV === 'production') {
-    const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-    if (vercel) return `https://${vercel}`;
+    const prodUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    if (prodUrl) return `https://${prodUrl}`;
   }
+  if (serverEnv.NEXT_PUBLIC_SITE_URL) return serverEnv.NEXT_PUBLIC_SITE_URL;
   return 'http://localhost:3000';
 }
 
