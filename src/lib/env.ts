@@ -17,10 +17,11 @@ import { z } from 'zod';
 const serverEnvSchema = z.object({
   // Postgres (Drizzle) — voir PLAN.md Phase A4 : en production DATABASE_URL doit
   // pointer vers le pooler transaction (port 6543) avec le rôle applicatif
-  // `app_user` (moindre privilège) ; DIRECT_URL (port 5432, rôle postgres) n'est
-  // utilisé QUE par les scripts DDL/migrations/seed.
+  // `app_user` (moindre privilège). DIRECT_URL (port 5432, rôle postgres) n'est
+  // utilisé QUE par les scripts DDL/migrations/seed (ils lisent process.env) :
+  // il n'est donc pas requis au runtime serveur → optionnel ici.
   DATABASE_URL: z.string().min(1, 'DATABASE_URL manquante dans les variables serveur'),
-  DIRECT_URL: z.string().min(1, 'DIRECT_URL manquante dans les variables serveur'),
+  DIRECT_URL: z.string().optional(),
 
   // Supabase Auth (URL projet + clé anon publique).
   NEXT_PUBLIC_SUPABASE_URL: z
