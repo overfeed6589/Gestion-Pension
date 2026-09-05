@@ -1,6 +1,7 @@
 import { db } from '@/db';
 import { bookings, payments } from '@/db/schema';
 import { sql } from 'drizzle-orm';
+import Link from 'next/link';
 import { getCurrentProfile, canAccess, requireUser } from '@/lib/auth';
 import { getOccupancyRateForDate } from '@/lib/scheduling/occupancy';
 import { formatCents } from '@/lib/money';
@@ -68,6 +69,28 @@ export default async function DashboardHomePage() {
         <div className="bg-white border rounded-xl p-5 flex items-center justify-between">
           <p className="text-xs text-slate-500 uppercase tracking-wide">Se connecter pour les détails</p>
           <p className="text-xs text-slate-400">{user.email}</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="font-semibold">Actions rapides</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[
+            { href: '/dashboard/offres', label: 'Offres & demandes' },
+            { href: '/dashboard/offres/nouvelle', label: 'Nouvelle offre' },
+            { href: '/dashboard/clients', label: 'Clients' },
+            { href: '/dashboard/register', label: 'Registre' },
+            { href: '/dashboard/taches', label: 'Tâches du jour' },
+            { href: '/dashboard/housing', label: 'Logements' },
+          ].map((a) => (
+            <Link
+              key={a.href}
+              href={a.href}
+              className="bg-white border rounded-xl px-3 py-4 text-center text-sm font-medium text-slate-700 hover:border-slate-400 hover:shadow-sm transition"
+            >
+              {a.label}
+            </Link>
+          ))}
         </div>
       </div>
 
