@@ -2,15 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
-import { bookings, bookingSegments, housingUnits } from '@/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { bookings } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { ActionState } from '@/types/actions';
 import { requireRole } from '@/lib/auth';
-
-interface Vaccine {
-  name: string;
-  expiresAt: string; // Date au format YYYY-MM-DD
-}
 
 /**
  * Valide l'arrivée effective de l'animal (Check-in)
@@ -36,22 +31,9 @@ export async function checkInBookingAction(bookingId: string): Promise<ActionSta
         throw new Error("Réservation introuvable.");
       }
 
-      // 2. Récupérer les segments pour libérer/occuper les unités de logement associées si besoin
-      const segments = await tx.query.bookingSegments.findMany({
-        where: { RAW: (t) => eq(bookingSegments.bookingId, bookingId),},
-      });
-
-      // Optionnel : Si une unité physique est assignée, on peut marquer l'unité comme occupée / indisponible
-      for (const segment of segments) {
-        if (segment.unitId) {
-          await tx
-            .update(housingUnits)
-            .set({ isAvailable: false })
-            .where(eq(housingUnits.id, segment.unitId));
-        }
-      }
-
-      
+      // B3 : l'occupation est DÉRIVÉE des segments (checker/allocation/occupancy).
+      // On ne touche plus à `housing_units.is_available` (réservé au « hors
+      // service » manuel). Un check-in ne modifie donc que le booking.
     });
 
     revalidatePath(`/dashboard/bookings/${bookingId}`);
@@ -86,21 +68,9 @@ export async function checkOutBookingAction(bookingId: string): Promise<ActionSt
       if (!updatedBooking) {
         throw new Error("Réservation introuvable.");
       }
-
-      // 2. Récupérer les segments pour libérer les unités de logement
-      const segments = await tx.query.bookingSegments.findMany({
-        where: { RAW: (t) => eq(bookingSegments.bookingId, bookingId),},
-      });
-//where: { RAW: (t) => eq(bookings.id, bookingId),},
-      // 3. Libérer les box correspondants
-      for (const segment of segments) {
-        if (segment.unitId) {
-          await tx
-            .update(housingUnits)
-            .set({ isAvailable: true })
-            .where(eq(housingUnits.id, segment.unitId));
-        }
-      }
+      // B3 : l'occupation est DÉRIVÉE des segments. Un départ réel (anticipé ou
+      // non) libère l'unité via `COALESCE(actual_check_out, end_date)` dans
+      // checker/allocation/occupancy. On ne mute pas `is_available`.
     });
 
     revalidatePath(`/dashboard/bookings/${bookingId}`);
@@ -115,13 +85,11 @@ export async function checkOutBookingAction(bookingId: string): Promise<ActionSt
 }
 
 //Registre des Entrées/Sorties
-export async function getLegalRegisterEntries(dateStr?: string) {
+export async function getLegalRegisterEntries() {
   // Lecture du registre (données personnelles) : accès `staff` (A2).
   await requireRole('staff');
 
-  const targetDate = dateStr ? new Date(dateStr) : new Date();
-
-  // On récupère les réservations qui couvrent cette période ou ont eu lieu
+  // On récupère les réservations pertinentes pour le registre légal
   const activeBookings = await db.query.bookings.findMany({
     with: {
       client: true,

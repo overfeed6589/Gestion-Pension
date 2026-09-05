@@ -57,7 +57,7 @@ export async function createPurchaseOrderAction(data: {
       revalidatePath('/dashboard/purchase-orders');
       return { success: true, message: `Commande ${orderNumber} enregistrée avec succès.` };
     });
-  } catch (error) {
+  } catch {
     return { success: false, message: 'Erreur lors de la création de la commande.' };
   }
 }
@@ -79,7 +79,7 @@ export async function markOrderAsReceivedAction(
 
     revalidatePath('/dashboard/purchase-orders');
     return { success: true, message: 'Réception enregistrée avec succès.' };
-  } catch (error) {
+  } catch {
     return { success: false, message: 'Erreur lors du marquage de réception.' };
   }
 }

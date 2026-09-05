@@ -117,8 +117,138 @@ Règles :
 
 ---
 
+## Phase G — Itération 1 : canal public (demande → offre → acompte), vie quotidienne & dashboards
+
+Document produit : `docs/ROADMAP.md`. Décisions de cadrage :
+- Résa publique dès l'itération 1, flux **demande → offre → acompte** (pas
+  d'instantané). Acompte 30 % Stripe (carte) ; **le paiement confirme**.
+- Tarification **par espace + supplément/animal au-delà du 1er**, configurable
+  **par catégorie**. Capacité = 1 espace ≤ N animaux d'une même famille.
+- **Facture d'acompte à la confirmation** (trace de remboursement). Acompte
+  remboursé si annulation ≥ 7 j avant l'arrivée ; sinon retenu.
+- Mono-tenant pilote, mais table `pension_settings` (1 ligne) = seule source de
+  branding/config des pages publiques (prépare le futur multi-tenant sans
+  isolation à implémenter maintenant).
+- Prérequis : **Phase D** (migrations versionnées + CI + premiers tests) posée
+  avant d'étendre le schéma. Plus de push ad hoc.
+- Mailing it1 = outbound transactionnel uniquement (pas de lecture de boîte).
+
+### G1. Fondations (ordre imposé : D d'abord)
+- Drizzle en migrations versionnées (`drizzle-kit generate`/`migrate`) ; CI
+  GitHub Actions : `npm run lint` → `npm run typecheck` → `npm run build` ;
+  tests Vitest sur `lib/scheduling`, moteur de prix, numérotation.
+- `drizzle.config.ts` : brancher sur `DIRECT_URL` (5432, postgres) pour les
+  migrations ; runtime inchangé (pooler `app_user`).
+
+### G2. Schéma (migration versionnée unique)
+- **`pension_settings`** (1 ligne, clé id fixe) : `pensionName`, `legalAddress`,
+  `siret`, `contactEmail` (mail secrétaire, fallback owner), `phone`,
+  `depositPercent` (défaut 30), `cancellationRefundDays` (défaut 7),
+  `offerValidityHours` (défaut 72), `publicDomain`, `logoUrl`.
+- **`housing_categories`** : + `surchargePerAnimal` (integer, centimes, défaut 0),
+  + `isPublic` (bool, défaut true), + `publicName`/`publicDescription` optionnels.
+- **`bookings`** : statut étendu + traçabilité annulation —
+  `BOOKING_STATUSES` devient `requested` (demande web reçue, sans segments),
+  `offered` (offre émise → segments créés et **bloquants**), `confirmed`,
+  `checked_in`, `checked_out`, `cancelled`, `expired`. Ajouts : `source`
+  (`web`/`phone`/`walk_in`/…), `offeredExpiresAt` (timestamp), `cancelledAt`,
+  `cancelledReason`, `refundedAt`. (Colonnes TEXT : l'ajout de statut ne touche
+  que le tableau `as const` + zod, pas de migration.)
+- **`invoices`** : confirmer l'usage de `type` `deposit`/`final`/`credit_note`
+  (déjà prévu). Pas de nouvelle colonne nécessaire.
+- Sémantique dispo inchangée : le checker (B1) n'exclut que `cancelled` → un
+  booking `offered` **bloque** sa ou ses unités (protégé aussi par la contrainte
+  `EXCLUDE` de B2). C'est le mécanisme anti-double-offre.
+
+### G3. Flux demande → offre → acompte
+- **Routes publiques** dans la même app (route group hors `/dashboard`, sans
+  auth — la `middleware.ts` ne protège que `/dashboard/*`), domaine public
+  (ex: reserve.chat-s-amuse.com) servi via settings + Vercel.
+- **Formulaire public** : coordonnées du maître, dates, nb chats, fiche minimale
+  par animal (nom, sexe, stérilisé, né, I-CAD, attestation vaccins/carnet),
+  message. Protection anti-spam : rate-limit + honeypot ; consentement RGPD
+  stocké (trace).
+- **Rattachement prospect** : `email` déjà en base → rattacher à la fiche
+  existante (dossier + animaux proposés, à valider par la secretary) ; sinon
+  créer client + pets avec `source`. Booking en `requested`.
+- **File d'attente secretary** (dashboard) : valider le rattachement, puis
+  construire l'**offre** = 1..n segments (découpage manuel assisté de la dispo,
+  réutilise `lib/scheduling/` : `findFreeUnitInCategory` etc.) + services.
+  À la soumission : booking `requested → offered`, insertion atomique des
+  `booking_segments` + `segment_pets`, `offeredExpiresAt = now + 72h`, génération
+  du lien Stripe Checkout (montant = acompte 30 %, `client_reference_id` =
+  booking), email de l'offre au client.
+- **Groupe > capacité** : répartir les animaux sur plusieurs espaces/segments
+  parallèles (mêmes dates, sous-ensembles via `segment_pets`) — la capacité et le
+  supplément se calculent par segment.
+- **Stripe** : `POST /api/stripe/webhook` (endpoint déjà anticipé côté schéma) →
+  paiement `succeeded` → booking `offered → confirmed`, `payments` inséré,
+  **facture d'acompte émise** (`type=deposit`), email de confirmation. Gérer
+  idempotence du webhook, montants inattendus, re-tentatives de lien.
+- **Expiration (cron quotidien)** : tout `offered` dont `offeredExpiresAt` est
+  dépassé → `expired` (segments libérés), notifier la pension pour relancer le
+  client avant expiration si pertinent.
+
+### G4. Moteur de prix & facturation
+- Nouveau `lib/pricing/` : prix segment = `nuits × (basePricePerNight +
+  (pets_du_segment − 1) × surchargePerAnimal)` ; total booking = Σ segments +
+  services (≠ acompte déjà réglé) ; acompte = `total × depositPercent`.
+- **Refonte de la génération de facture** (`generateFinalInvoiceAction`) :
+  actuellement basée sur `segments[0]` et `basePricePerNight` seul → passer à
+  tous les segments + surcharge par animal (via `occupantLinks`), et émettre le
+  bon `type` (`deposit` à la confirmation, `final` au check-out avec déduction de
+  l'acompte, `credit_note`/statut `refunded` sur remboursement).
+- **Numérotation robuste** (ex-B5) : remplacer `SELECT MAX` de
+  `lib/invoicing/numbering.ts` par une séquence/verrou atomique en transaction.
+- **Annulation (≥ 7 j avant arrivée)** : remboursement Stripe de l'acompte,
+  `payments` → `refunded`, facture d'acompte → statut `refunded` ou `credit_note`
+  (trace), booking `cancelled` + `cancelledAt`/`cancelledReason`. < 7 j : acompte
+  retenu (règle en settings).
+
+### G5. Tâches du jour (tours matin/soir)
+- Nouvelle vue proche de `/dashboard/register` (garde `staff`/owner) : sélecteur
+  de date ; pour chaque animal couvert par un segment `confirmed`/`checked_in` ce
+  jour : espace/unité, alimentation (croquettes/pâtée, `dietNotes`), médicaments
+  (heures/notes), comportement (`medicalNotes`, `internalNotes` importantes).
+- Génération **déterministe** (SQL, aucune IA). Cocher un item = persister une
+  ligne `daily_reports` (champs existants : appétit, selles, comportement,
+  médocs donnés, notes).
+
+### G6. Relances automatiques & dashboards owner
+- **Cron quotidien** (Vercel Cron, 1 exécution/jour en plan gratuit) : route
+  interne gardée qui applique les règles :
+  1. offre `offered` impayée depuis X h → rappel acompte (avant expiration) ;
+  2. `confirmed` non soldée à **J-7** de l'arrivée → rappel solde ;
+  3. expiration des `offered` (G3).
+- **Email outbound** : fournisseur à coût quasi nul et scalable (Resend free
+  tier ou Gmail API Workspace) ; SPF/DKIM/DMARC posés sur le domaine ; templates
+  versionnés ; échec d'envoi = trace + re-tentative.
+- **Dashboards owner** : agrégats SQL (pas de calcul lourd) — occupation par
+  unité/période (réutilise la logique d'occupation B3), CA prévisionnel
+  (segments `confirmed` × prix) vs encaissé (`payments.succeeded`), impayés,
+  répartition mensuelle.
+
+### G7. Sécurité & RGPD (canal public)
+- Pages publiques **sans guard** mais : rate-limit, honeypot, validation zod
+  (schémas dans `lib/validations/`), pas de données sensibles exposées.
+- Consentement RGPD stocké avec la demande ; minimisation des données du
+  formulaire ; mentions légales (settings) ; effacement via l'existant
+  (`onDelete: 'cascade'` côté clients) + rappel docs/securite-supabase.md.
+- Gardes `requireRole` inchangées sur **toutes** les écritures internes (nouveau
+  flux public = actions sans guard uniquement pour créer la `requested`).
+
+### G8. Tests ciblés (Vitest)
+- Dispo : un segment `offered` bloque (chevauchement), `expired`/`cancelled`
+  libère.
+- Prix : supplément/animal, groupes répartis sur plusieurs segments, acompte.
+- Numérotation : séquence atomique (plus de trous/race).
+- Règles de relance/remboursement : fenêtre ≥ 7 j vs < 7 j.
+
+---
+
 ## Ordre d'implémentation
 
-A1 → A2 → A4/A5 → B1/B2 → A3 (console) → C → D → E → F.
+A1 → A2 → A4/A5 → B1/B2 → A3 (console) → C → D (migrations + CI + tests)
+→ **G (itération 1, cible mi-octobre)** → E → F.
 Chaque étape : implémentation commentée → vérification (`npx tsc --noEmit`, `npm run lint`)
 → proposition de commit → validation manuelle.

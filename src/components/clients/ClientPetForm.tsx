@@ -15,10 +15,14 @@ export function ClientPetForm() {
     setVaccines([...vaccines, { name: '', expiresAt: '', isMandatory: false }]);
   };
 
-  const updateVaccine = (index: number, field: keyof VaccineInput, value: any) => {
-    const updated = [...vaccines];
-    updated[index] = { ...updated[index], [field]: value };
-    setVaccines(updated);
+  const updateVaccine = (
+    index: number,
+    field: keyof VaccineInput,
+    value: string | boolean
+  ) => {
+    setVaccines((prev) =>
+      prev.map((v, i) => (i === index ? ({ ...v, [field]: value } as VaccineInput) : v))
+    );
   };
 
   return (

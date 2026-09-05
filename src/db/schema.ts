@@ -4,10 +4,9 @@ import {
   text, 
   boolean, 
   date, 
-  timestamp, 
-  integer, 
+  timestamp,
+  integer,
   jsonb,
-  pgEnum,
   index,
   varchar 
 } from 'drizzle-orm/pg-core';
@@ -18,11 +17,22 @@ import { defineRelations } from 'drizzle-orm';
 // ==========================================
 
 export const BOOKING_STATUSES = [
-  'pending',     // En attente de validation / acompte
-  'confirmed',   // Validée
+  'requested',   // Demande reçue (web/téléphone) — pas encore d'offre (aucun segment)
+  'offered',     // Offre émise — segments créés et BLOQUANTS, acompte en attente
+  'expired',     // Offre non honorée dans le délai (expiration) — segments libérés
+  'confirmed',   // Validée (acompte reçu)
   'checked_in',  // Animal arrivé (en garde)
   'checked_out', // Séjour terminé
   'cancelled',   // Annulée
+] as const;
+
+// Origine d'une réservation (Phase G : canal public web).
+export const BOOKING_SOURCES = [
+  'web',      // Formulaire de demande public
+  'phone',    // Téléphone / WhatsApp
+  'walk_in',  // Sur place
+  'email',
+  'other',
 ] as const;
 
 export const PAYMENT_STATUSES = [
@@ -104,6 +114,7 @@ export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];
 
 // Types exportés pour autocomplétion TypeScript
 export type BookingStatus = typeof BOOKING_STATUSES[number];
+export type BookingSource = typeof BOOKING_SOURCES[number];
 export type PaymentStatus = typeof PAYMENT_STATUSES[number];
 export type PaymentMethod = typeof PAYMENT_METHODS[number];
 export type PaymentTransactionStatus = typeof PAYMENT_TRANSACTION_STATUSES[number];
@@ -139,6 +150,29 @@ export type VaccineRecord = {
   expiresAt?: string;      // Date de rappel YYYY-MM-DD
   isMandatory?: boolean;   // Obligatoire pour la pension
 };
+
+// ==========================================
+// 1ter. PARAMÈTRES PENSION (Phase G — settings)
+// ==========================================
+// Ligne unique (id = 'singleton') : identité/branding légal de la pension et
+// règles commerciales (acompte, annulation, validité d'une offre). Les pages
+// publiques lisent cette table : c'est le point d'extension futur multi-tenant
+// (1 ligne par org), sans isolation implémentée pour l'instant.
+export const pensionSettings = pgTable('pension_settings', {
+  id: text('id').primaryKey(), // Valeur fixe 'singleton'
+  pensionName: text('pension_name').notNull(),
+  legalAddress: text('legal_address'),
+  siret: varchar('siret', { length: 14 }),
+  contactEmail: text('contact_email'), // Mail secrétaire, sinon owner
+  phone: text('phone'),
+  depositPercent: integer('deposit_percent').default(30).notNull(),
+  cancellationRefundDays: integer('cancellation_refund_days').default(7).notNull(),
+  offerValidityHours: integer('offer_validity_hours').default(72).notNull(),
+  publicDomain: text('public_domain'),
+  logoUrl: text('logo_url'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
 // ==========================================
 // 2. CLIENTS
@@ -199,7 +233,16 @@ export const housingCategories = pgTable('housing_categories', {
   name: text('name').notNull(), // Ex: Box Luxe, Chenil Standard
   description: text('description'),
   capacity: integer('capacity').default(1).notNull(),
+
+  // Phase G — tarification & catalogue public
   basePricePerNight: integer('base_price_per_night').notNull(), // En centimes
+  // Supplément par animal AU-DELÀ du 1er occupant d'un espace (en centimes/nuit).
+  // Ex: capacité 3, base 2000, 2 chats → 2000 + (2-1)*surcharge.
+  surchargePerAnimal: integer('surcharge_per_animal').default(0).notNull(),
+  // Exposée sur le site public de réservation (catalogue).
+  isPublic: boolean('is_public').default(true).notNull(),
+  publicName: text('public_name'), // Nom affiché au public si différent
+  publicDescription: text('public_description'),
 });
 
 export const housingUnits = pgTable('housing_units', {
@@ -235,8 +278,9 @@ export const extraServices = pgTable('extra_services', {
 export const bookings = pgTable('bookings', {
   id: uuid('id').defaultRandom().primaryKey(),
   clientId: uuid('client_id').references(() => clients.id).notNull(),
-  status: text('status', { enum: BOOKING_STATUSES }).default('pending').notNull(),
-  
+  status: text('status', { enum: BOOKING_STATUSES }).default('requested').notNull(),
+  source: text('source', { enum: BOOKING_SOURCES }).default('phone').notNull(),
+
   // Tarification & Acomptes (en centimes)
   totalPrice: integer('total_price').notNull(),
   depositAmount: integer('deposit_amount').default(0).notNull(),
@@ -253,6 +297,15 @@ export const bookings = pgTable('bookings', {
   // Registre légal Entrée/Sortie réelles
   actualCheckIn: timestamp('actual_check_in'),
   actualCheckOut: timestamp('actual_check_out'),
+
+  // Cycle offre (Phase G) : validité de l'offre émise, avant conversion ou
+  // expiration automatique par le cron.
+  offeredExpiresAt: timestamp('offered_expires_at'),
+
+  // Traçabilité annulation / remboursement (Phase G)
+  cancelledAt: timestamp('cancelled_at'),
+  cancelledReason: text('cancelled_reason'),
+  refundedAt: timestamp('refunded_at'),
 
   // Option A : Notes simples pour le check-in
   dietNotes: text('diet_notes'),

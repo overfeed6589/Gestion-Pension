@@ -13,14 +13,14 @@ export default async function HousingManagementPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Parc de Logements & Box</h1>
         <p className="text-muted-foreground">
-          Visualisez en temps réel l'occupation et la disponibilité de chaque box de la pension.
+          Visualisez en temps réel l’occupation et la disponibilité de chaque box de la pension.
         </p>
       </div>
 
       <div className="space-y-6">
         {categories.length === 0 ? (
           <div className="bg-card border rounded-xl p-6 text-center text-muted-foreground italic">
-            Aucune catégorie de logement configurée pour l'instant.
+            Aucune catégorie de logement configurée pour l’instant.
           </div>
         ) : (
           categories.map((category) => (

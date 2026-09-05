@@ -32,6 +32,17 @@ const serverEnvSchema = z.object({
 
   // Intégration facturation (Pennylane) — requise uniquement si on synchronise.
   PENNYLANE_API_KEY: z.string().min(1, 'PENNYLANE_API_KEY manquante').optional(),
+
+  // Stripe (paiement des acomptes — Phase G it1) : requises uniquement pour
+  // créer des sessions Checkout / vérifier les webhooks. Optionnelles en dev
+  // pour ne pas bloquer le reste de l'app ; l'usage est gardé par le code.
+  STRIPE_SECRET_KEY: z.string().min(1, 'STRIPE_SECRET_KEY manquante').optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1, 'STRIPE_WEBHOOK_SECRET manquante').optional(),
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+
+  // Email sortant (Resend — Phase G it1) : optionnel en dev, requis en prod
+  // pour l'envoi des offres / relances.
+  RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY manquante').optional(),
 });
 
 function loadServerEnv() {

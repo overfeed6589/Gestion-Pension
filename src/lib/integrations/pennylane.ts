@@ -11,7 +11,7 @@ export async function syncInvoiceToPennylane(invoiceId: string) {
   }
 
   const invoice = await db.query.invoices.findFirst({
-    where: {RAW: (t) => eq(invoices.id, invoiceId),},
+    where: { RAW: () => eq(invoices.id, invoiceId) },
     with: {
       client: true,
       items: true,

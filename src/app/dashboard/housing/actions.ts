@@ -52,7 +52,7 @@ export async function createHousingCategoryAction(
       success: true,
       message: 'Catégorie créée avec succès',
     };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       message: 'Erreur lors de la création en base de données',

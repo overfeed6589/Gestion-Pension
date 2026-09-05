@@ -87,8 +87,13 @@ export async function createClientWithPetAction(
 
     revalidatePath('/dashboard/clients');
     return { success: true, message: 'Client et animal enregistrés avec succès !' };
-  } catch (error: any) {
-    if (error?.code === '23505') {
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: unknown }).code === '23505'
+    ) {
       return { success: false, message: 'Un client avec cet email existe déjà.' };
     }
     return { success: false, message: "Erreur lors de la création du dossier." };

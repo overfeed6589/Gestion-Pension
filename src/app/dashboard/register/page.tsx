@@ -39,7 +39,7 @@ export default async function WeeklyRegisterPage() {
     orderBy: (bookings, { asc }) => [asc(bookings.checkInDate)],
   });
 
-  // 1. Mouvements d'aujourd'hui (pour action directe)
+  // 1. Mouvements d'aujourd’hui (pour action directe)
   const arrivingToday = bookings.filter((b) => {
     const checkIn = new Date(b.checkInDate).toISOString().split('T')[0];
     return checkIn === todayStr && b.status === 'confirmed';
@@ -65,7 +65,7 @@ export default async function WeeklyRegisterPage() {
           </p>
         </div>
         <div className="bg-muted px-4 py-2 rounded-lg text-sm font-medium">
-          Aujourd'hui : {today.toLocaleDateString('fr-FR', { dateStyle: 'full' })}
+          Aujourd’hui : {today.toLocaleDateString('fr-FR', { dateStyle: 'full' })}
         </div>
       </div>
 
@@ -84,7 +84,7 @@ export default async function WeeklyRegisterPage() {
             </h3>
             <div className="space-y-3">
               {arrivingToday.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">Aucune arrivée en attente aujourd'hui.</p>
+                <p className="text-sm text-muted-foreground italic">Aucune arrivée en attente aujourd’hui.</p>
               ) : (
                 arrivingToday.map((booking) => {
                   const petsList = booking.segments.flatMap((s) => s.occupantLinks.map((ol) => ol.pet?.name)).join(', ');
@@ -116,7 +116,7 @@ export default async function WeeklyRegisterPage() {
             </h3>
             <div className="space-y-3">
               {departingToday.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">Aucun départ prévu aujourd'hui.</p>
+                <p className="text-sm text-muted-foreground italic">Aucun départ prévu aujourd’hui.</p>
               ) : (
                 departingToday.map((booking) => {
                   const petsList = booking.segments.flatMap((s) => s.occupantLinks.map((ol) => ol.pet?.name)).join(', ');
@@ -151,7 +151,7 @@ export default async function WeeklyRegisterPage() {
         </h2>
         
         {currentlyInPension.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic bg-card border p-4 rounded-xl">Aucun animal n'est actuellement hébergé dans la pension.</p>
+          <p className="text-sm text-muted-foreground italic bg-card border p-4 rounded-xl">Aucun animal n’est actuellement hébergé dans la pension.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {currentlyInPension.map((booking) => {
@@ -196,7 +196,7 @@ export default async function WeeklyRegisterPage() {
               >
                 <div className="text-center pb-2 border-b">
                   <p className={`text-xs font-bold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
-                    {isToday ? "Aujourd'hui" : day.label.split(' ')[0]}
+                    {isToday ? "Aujourd’hui" : day.label.split(' ')[0]}
                   </p>
                   <p className="text-sm font-semibold">{day.label.split(' ').slice(1).join(' ')}</p>
                 </div>
