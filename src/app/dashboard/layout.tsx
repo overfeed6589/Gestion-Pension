@@ -17,6 +17,7 @@ const NAV_LINKS = [
   { href: '/dashboard/taches', label: 'Tâches du jour' },
   { href: '/dashboard/clients', label: 'Clients' },
   { href: '/dashboard/housing', label: 'Logements & box' },
+  { href: '/dashboard/parametres', label: 'Paramètres' },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
