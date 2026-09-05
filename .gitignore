@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# outils locaux (opencode / skills) — non versionnés
+.agents/
+skills-lock.json
+
+# gros fichiers / dumps locaux
+core.*

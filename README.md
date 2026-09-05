@@ -1,51 +1,59 @@
-<<<<<<< HEAD
-GESTION DE LA PENSION
+# Gestion-Pension
 
-Composition dev:
-    Framework Frontend & API : Next.js (App Router)
-    Composants UI & Planning : TailwindCSS + shadcn/ui + FullCalendar ou @dnd-kit
-    Base de Données & ORM : PostgreSQL avec Drizzle ORM
-    Backend & BDD As-a-Service : Supabase
-    Module IA : Vercel AI SDK + OpenAI API ou autre API IA
-    Gestion des Tâches en Arrière-plan (Background Jobs) : Inngest
-    Communication :
-        Emails : Resend
-        SMS : Brevo
-=======
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Application de gestion de pension pour animaux (séjours, réservation, facturation).
+Première application réelle : pension pour chats (France). Cible produit : outil
+diffusé par abonnement à d'autres pensions.
 
-## Getting Started
+## Stack
 
-First, run the development server:
+- **Next.js 16** (App Router) + React 19 + Tailwind CSS v4
+- **Drizzle ORM** (+ drizzle-kit) sur PostgreSQL **Supabase** (auth uniquement)
+- **Supabase Auth** (cookies de session durcis, proxy `src/proxy.ts`)
+- Paiement : **Stripe** (acomptes, Checkout + webhook)
+- Emails : **Resend** ; tâches planifiées : Vercel Cron
+- Tests : **Vitest**
+
+## Documentation
+
+| Sujet | Fichier |
+|---|---|
+| Architecture & conventions | `AGENTS.md` (à lire avant de coder) |
+| Plan technique (sécurité, itération 1) | `PLAN.md` |
+| Roadmap produit | `docs/ROADMAP.md` |
+| Déploiement Vercel/Stripe + smoke test | `docs/deploiement-vercel.md` |
+| Durcissement Supabase (checklist) | `docs/securite-supabase.md` |
+
+## Démarrage local
 
 ```bash
+npm install
+cp .env.local.example .env.local   # (si présent) ou configurez les variables
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Variables attendues : voir `src/lib/env.ts` (échec tôt si une clé requise manque).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commandes utiles
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev          # dev
+npm run build        # build
+npm run lint         # eslint
+npm run typecheck    # tsc --noEmit
+npm test             # vitest
+npm run db:generate  # drizzle-kit generate (migration versionnée)
+npm run db:migrate   # drizzle-kit migrate (DIRECT_URL / 5432)
+npm run db:grants    # rôle app_user (moindre privilège)
+npm run db:constraints # contrainte anti double-réservation
+npm run seed:profiles  # emails Supabase → rôles (profiles)
+```
 
-## Learn More
+## Parcours principal (itération 1)
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
->>>>>>> 23bb50e (Initial commit from Create Next App)
+1. Client dépose une **demande** depuis le site public (`/`).
+2. La secrétaire la transforme en **offre** (`/dashboard/offres`) : espaces
+   bloqués (segments), tarif par espace + supplément/animal, acompte (défaut 30 %).
+3. Le client paie l'acompte (Stripe) → réservation **confirmée**, **facture
+   d'acompte** émise.
+4. Le personnel suit les **tâches du jour** et le **registre** (check-in/out) ;
+   le propriétaire consulte occupation, CA prévisionnel et encaissés.

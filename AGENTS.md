@@ -12,16 +12,17 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Repo basics
 - Language: repo is French. UI strings, comments, DB comments, and commit messages are in French — keep new ones French. Commit style: one-line summaries like `MaJ schema supabase ...`.
-- `README.md` is stale: it contains unresolved git merge-conflict markers plus create-next-app boilerplate. Do not trust it.
+- `README.md` is a short, valid overview (démarrage, commandes, docs, parcours it1).
 - `CLAUDE.md` just references `@AGENTS.md`.
-- A multi-GB untracked core dump (`core.*`) sits at repo root — never `git add -A` it; safe to delete.
+- Tooling-specific files (`.agents/`, `skills-lock.json`) et dumps locaux (`core.*`) sont gitignorés.
 
 ## Stack (package.json)
 - Next.js 16.3.3 (App Router) + React 19. Tailwind CSS v4 (CSS-first, `@import "tailwindcss"` in `src/app/globals.css`, no tailwind.config).
 - Drizzle ORM `drizzle-orm@^1.0.0-rc` (+ `drizzle-kit`) against Supabase-hosted Postgres; Supabase (`@supabase/ssr`) used for **auth only** (no Supabase data access). zod v4 for validation.
 
 ## Commands
-- `npm run dev` / `npm run build` / `npm run lint` (= `eslint`, flat config). **No test suite, no CI** — typecheck via `npm run typecheck` (= `npx tsc --noEmit`).
+- `npm run dev` / `npm run build` / `npm run lint` (= `eslint`, flat config). Typecheck via `npm run typecheck` (= `npx tsc --noEmit`) ; tests Vitest via `npm test` ; CI GitHub Actions (`lint → typecheck → test → build`) dans `.github/workflows/ci.yml`.
+- Migrations Drizzle **versionnées** (`drizzle/`, baseline appliquée) : `npm run db:generate` puis `npm run db:migrate` (en `DIRECT_URL`/5432). Les évolutions de schéma passent par une migration, plus de push ad hoc.
 - DB admin scripts (run as `postgres` via `DIRECT_URL`, port 5432 — NOT the pooler):
   `npm run db:grants` (`scripts/apply-grants.ts`, creates least-privilege role `app_user`),
   `npm run db:constraints` (`scripts/apply-constraints.ts`, anti double-booking exclusion constraint on `booking_segments`),
@@ -29,7 +30,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Env comes from `.env.local` (gitignored). `drizzle.config.ts` loads it via `dotenv.config({ path: '.env.local' })` and uses `DIRECT_URL || DATABASE_URL`.
 - Runtime server env is validated once through `serverEnv` in `src/lib/env.ts` (zod, fails fast) — import it instead of reading `process.env` ad hoc; never import it from a client component.
 - Connection split (least privilege, PLAN.md A4): `DATABASE_URL` = pooler transaction 6543 with `app_user`; `DIRECT_URL` (5432, `postgres`) only for DDL/migrations/seeds/grants.
-- DB schema is `src/db/schema.ts`; no `drizzle/` migration snapshots are committed — schema edits are pushed straight to the live Supabase Postgres (recent commits are all schema updates).
+- DB schema is `src/db/schema.ts`; évolutions appliquées via les migrations versionnées `drizzle/` (`npm run db:migrate`, en DIRECT_URL). Les snapshots drizzle sont commités.
 
 ## Architecture & conventions
 - Path alias `@/*` → `src/*`. Import db as `db` from `@/db`; Supabase SSR client from `@/utils/supabase/server`.
