@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: '/dashboard', label: 'Tableau de bord' },
   { href: '/dashboard/offres', label: 'Offres & réservations' },
   { href: '/dashboard/register', label: 'Registre / planning' },
+  { href: '/dashboard/taches', label: 'Tâches du jour' },
   { href: '/dashboard/clients', label: 'Clients' },
   { href: '/dashboard/housing', label: 'Logements & box' },
 ];

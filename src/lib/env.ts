@@ -47,6 +47,11 @@ const serverEnvSchema = z.object({
   // Email sortant (Resend — Phase G it1) : optionnel en dev, requis en prod
   // pour l'envoi des offres / relances.
   RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY manquante').optional(),
+  // Expéditeur par défaut des emails transactionnels (ex: Pension <noreply@chat-s-amuse.com>).
+  EMAIL_FROM: z.string().min(1, 'EMAIL_FROM manquante').optional(),
+
+  // Sécurité du cron (Phase G6) : en-tête Bearer exigé si renseigné.
+  CRON_SECRET: z.string().min(1, 'CRON_SECRET manquante').optional(),
 });
 
 function loadServerEnv() {
