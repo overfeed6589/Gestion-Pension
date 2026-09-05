@@ -34,7 +34,7 @@ export async function createClient() {
               cookieStore.set(name, value, { ...cookieSecurityOptions(), ...options })
             );
           } catch {
-            // Le middleware rafraîchit les cookies
+            // Le proxy (src/proxy.ts) rafraîchit les cookies
           }
         },
       },

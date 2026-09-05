@@ -33,10 +33,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Architecture & conventions
 - Path alias `@/*` → `src/*`. Import db as `db` from `@/db`; Supabase SSR client from `@/utils/supabase/server`.
-- `src/middleware.ts` redirects unauthenticated `/dashboard/*` traffic to `/login`.
+- `src/proxy.ts` (convention `proxy`, ex-`middleware` dans Next 16) redirige le trafic `/dashboard/*` non authentifié vers `/login`.
 - Domain layout: pages are async server components under `src/app/dashboard/<module>/` (housing, bookings, clients, invoices, purchase-orders, register). Mutations are `'use server'` actions in colocated `actions.ts` files (e.g. `src/app/dashboard/clients/actions.ts`): they parse `FormData`, validate with zod schemas in `src/lib/validations/`, run `db.transaction`, call `revalidatePath`, and return `ActionState` from `src/types/actions.ts`. Domain/scheduling logic lives in `src/lib/` (`scheduling/`, `invoicing/`, `integrations/pennylane.ts`).
 - **Every `'use server'` mutation starts with an access guard** from `src/lib/auth.ts` (`requireUser()`, or `requireRole('secretary'|'staff'|'owner')` per the role matrix in `PLAN.md`). Roles live in the `profiles` table (`id` = `auth.users.id`, no public FK). `dev`/`owner` are "boss" roles covering all permissions; `secretary` and `staff` are disjoint.
-- Supabase is auth-only: no service-role key is used. Session cookies are hardened in `src/middleware.ts` and `src/utils/supabase/server.ts` (`httpOnly`, `sameSite: lax`, `secure` in prod). Manual Supabase console hardening steps live in `docs/securite-supabase.md`.
+- Supabase is auth-only: no service-role key is used. Session cookies are hardened in `src/proxy.ts` and `src/utils/supabase/server.ts` (`httpOnly`, `sameSite: lax`, `secure` in prod). Manual Supabase console hardening steps live in `docs/securite-supabase.md`.
 
 ## Drizzle — API is newer than most training data
 - `drizzle-orm@1.0.0-rc`: relations use `defineRelations(...)` imported from `drizzle-orm` (`src/db/schema.ts:431`), **not** the legacy `relations()` helper.
