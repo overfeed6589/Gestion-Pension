@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/auth';
 import { getUnitOccupancyForDate } from '@/lib/scheduling/occupancy';
 import { CategoryForm } from '@/components/housing/CategoryForm';
 import { UnitForm } from '@/components/housing/UnitForm';
+import { UnitAvailabilityButton } from '@/components/housing/UnitAvailabilityButton';
 import { formatCents } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
@@ -74,10 +75,13 @@ export default async function HousingManagementPage() {
                     return (
                       <div
                         key={unit.id}
-                        className={`border rounded-lg p-3 flex flex-col justify-between space-y-3 ${badge}`}
+                        className={`border rounded-lg p-3 flex flex-col justify-between space-y-2 ${badge}`}
                       >
-                        <span className="font-bold text-sm">{unit.name}</span>
-                        <span className="text-[11px] font-semibold">{label}</span>
+                        <div className="flex justify-between items-start">
+                          <span className="font-bold text-sm">{unit.name}</span>
+                          <span className="text-[11px] font-semibold">{label}</span>
+                        </div>
+                        <UnitAvailabilityButton unitId={unit.id} />
                       </div>
                     );
                   })}
