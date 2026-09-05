@@ -430,6 +430,21 @@ export const internalNotes = pgTable('internal_notes', {
 });
 
 // ==========================================
+// 10bis. JOURNAL D'AUDIT (Phase C — traçabilité)
+// ==========================================
+export const auditLogs = pgTable('audit_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  action: text('action').notNull(), // ex: 'booking.confirmed', 'booking.cancelled'
+  entityType: text('entity_type').notNull(), // ex: 'booking', 'invoice', 'payment'
+  entityId: text('entity_id'),
+  actorId: uuid('actor_id').references(() => profiles.id, { onDelete: 'set null' }),
+  metadata: jsonb('metadata'), // Contexte (raison, montants…)
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  entityIdx: index('audit_logs_entity_idx').on(table.entityType, table.entityId),
+}));
+
+// ==========================================
 // 11. FACTURATION CLIENT (VENTES)
 // ==========================================
 export const invoices = pgTable('invoices', {

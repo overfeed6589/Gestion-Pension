@@ -1,9 +1,10 @@
 import { db } from '@/db';
-import { bookings, payments, invoices } from '@/db/schema';
+import { bookings, payments, invoices, auditLogs } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { generateBookingInvoice } from '@/lib/invoicing/generate';
 import { refundPaymentIntent } from '@/lib/integrations/stripe';
 import { getPensionSettings } from '@/lib/settings';
+import { logAudit } from '@/lib/audit';
 
 // ---------------------------------------------------------------------------
 // Cycle de vie financier d'un séjour (Phase G3/G4)
@@ -84,6 +85,13 @@ export async function confirmDepositPayment(input: {
           .set({ status: 'paid', paidAt })
           .where(eq(invoices.id, inv.invoiceId));
       }
+
+      await logAudit(tx, {
+        action: 'booking.confirmed',
+        entityType: 'booking',
+        entityId: booking.id,
+        metadata: { amountCents: input.amountCents, method: 'stripe', source: 'checkout' },
+      });
 
       return { ok: true, bookingId: booking.id };
     });
@@ -169,6 +177,13 @@ export async function cancelBooking(
             .where(eq(invoices.id, depositInvoice[0].id));
         }
       }
+
+      await logAudit(tx, {
+        action: 'booking.cancelled',
+        entityType: 'booking',
+        entityId: booking.id,
+        metadata: { reason, refunded: mustRefund },
+      });
     });
 
     // Remboursement Stripe HORS transaction (appel réseau), après validation DB.
@@ -217,6 +232,12 @@ export async function expireOfferedBooking(bookingId: string): Promise<CancelBoo
     if (!updated) {
       return { ok: false, message: 'Offre non trouvée ou non expirable.' };
     }
+    await db.insert(auditLogs).values({
+      action: 'booking.expired',
+      entityType: 'booking',
+      entityId: bookingId,
+      metadata: { reason: 'Offre expirée (acompte non réglé)' },
+    });
     return { ok: true, refunded: false, message: 'Offre expirée.' };
   } catch (error) {
     console.error('expireOfferedBooking :', error);

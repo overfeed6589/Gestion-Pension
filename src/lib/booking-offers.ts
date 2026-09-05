@@ -1,17 +1,20 @@
 import { db } from '@/db';
-import {
-  bookings,
-  segmentPets,
-  housingCategories,
-  clients,
-  pets,
-} from '@/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { bookings, segmentPets, housingCategories, clients, pets } from '@/db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import { toDateString } from '@/lib/scheduling/checker';
 import { createBookingSegmentTx } from '@/lib/scheduling/allocation';
-import { computeSegmentPrice, computeDepositAmount } from '@/lib/pricing';
+import { computeDepositAmount } from '@/lib/pricing';
 import { getPensionSettings } from '@/lib/settings';
+import {
+  buildOfferPlan,
+  type OfferSegmentInput,
+  type PricedOfferSegment,
+} from '@/lib/offer-plan';
 import type { BookingSource } from '@/db/schema';
+
+// Re-exports pour compatibilité (le plan d'offre pur vit dans lib/offer-plan).
+export type { OfferSegmentInput, OfferPlanCategory, PricedOfferSegment, OfferPlan } from '@/lib/offer-plan';
+export { buildOfferPlan } from '@/lib/offer-plan';
 
 // ---------------------------------------------------------------------------
 // Création d'une réservation avec OFFRE (Phase G3)
@@ -22,20 +25,10 @@ import type { BookingSource } from '@/db/schema';
 // c'est le verrou anti-double-offre. Le paiement de l'acompte convertit ensuite
 // le booking en `confirmed`.
 //
-// Le découpage temporel est flexible :
-//  - segments SÉQUENTIELS (séjour scindé dans le temps, ex: 11 j type 1 + 2 j type 2)
-//  - segments PARALLÈLES (groupe dépassant la capacité d'un espace → réparti sur
-//    plusieurs espaces la même nuit)
-// Chaque segment porte la liste des animaux qui l'occupent (`segment_pets`) :
-// la tarification se fait par segment (base + supplément/animal au-delà du 1er).
+// La VALIDATION (dates, capacité, couverture) et le CALCUL DE PRIX sont PURE
+// (`buildOfferPlan` dans lib/offer-plan, testée sans DB) ; les fonctions qui
+// touchent la base s'appuient dessus avant toute écriture.
 // ---------------------------------------------------------------------------
-
-export type OfferSegmentInput = {
-  startDate: string; // 'YYYY-MM-DD'
-  endDate: string; // 'YYYY-MM-DD' (fin exclusive)
-  categoryId: string;
-  petIds: string[]; // animaux occupant CE segment
-};
 
 export type CreateOfferInput = {
   clientId: string;
@@ -43,6 +36,13 @@ export type CreateOfferInput = {
   checkOutDate: string;
   segments: OfferSegmentInput[];
   source?: BookingSource;
+};
+
+export type AttachOfferInput = {
+  bookingId: string;
+  checkInDate: string;
+  checkOutDate: string;
+  segments: OfferSegmentInput[];
 };
 
 export type CreateOfferResult =
@@ -57,65 +57,23 @@ export type CreateOfferResult =
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-/** Liste des nuits (dates 'YYYY-MM-DD') couvertes par [start, end). */
-function nightsBetween(start: string, end: string): string[] {
-  const out: string[] = [];
-  const cursor = new Date(`${start}T00:00:00Z`);
-  const limit = new Date(`${end}T00:00:00Z`);
-  while (cursor < limit) {
-    out.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return out;
-}
-
-/** Vérifie que chaque animal couvre EXACTEMENT chaque nuit du séjour. */
-function validateCoverage(
-  allPetIds: string[],
-  segments: OfferSegmentInput[],
-  stayNights: string[]
-): string | null {
-  const staySet = new Set(stayNights);
-  for (const petId of allPetIds) {
-    const coveredNights: string[] = [];
-    for (const seg of segments) {
-      if (!seg.petIds.includes(petId)) continue;
-      coveredNights.push(...nightsBetween(seg.startDate, seg.endDate));
-    }
-    // Pas de doublon (un animal ne peut pas être dans 2 espaces la même nuit).
-    const seen = new Set<string>();
-    for (const night of coveredNights) {
-      if (seen.has(night)) return 'Un animal apparaît dans plusieurs espaces la même nuit.';
-      seen.add(night);
-    }
-    // Couverture complète du séjour.
-    if (seen.size !== staySet.size) return 'Un animal ne couvre pas la totalité du séjour.';
-    for (const night of staySet) {
-      if (!seen.has(night)) return 'Un animal ne couvre pas la totalité du séjour.';
-    }
-  }
-  return null;
-}
+// ---------------------------------------------------------------------------
+// Création directe (booking + offre)
+// ---------------------------------------------------------------------------
 
 async function createOfferInTx(
   tx: Tx,
   input: CreateOfferInput,
   opts: { depositPercent: number; offerValidityHours: number }
 ): Promise<CreateOfferResult> {
-  const startStr = toDateString(input.checkInDate);
-  const endStr = toDateString(input.checkOutDate);
-  if (startStr >= endStr) {
-    return { ok: false, message: 'La date de sortie doit être postérieure à la date d’entrée.' };
-  }
-
-  // 1. Client + animaux (+ les catégories utilisées, verrouillées en lecture).
+  // 1. Client + animaux doivent exister et appartenir au client.
   const [client] = await tx.select().from(clients).where(eq(clients.id, input.clientId)).limit(1);
   if (!client) return { ok: false, message: 'Client introuvable.' };
 
   const clientPets = await tx
     .select({ id: pets.id })
     .from(pets)
-    .where(and(eq(pets.clientId, input.clientId)));
+    .where(eq(pets.clientId, input.clientId));
   const clientPetIds = new Set(clientPets.map((p) => p.id));
   const allPetIds = [...new Set(input.segments.flatMap((s) => s.petIds))];
   if (allPetIds.length === 0) return { ok: false, message: 'Aucun animal sur cette offre.' };
@@ -123,55 +81,25 @@ async function createOfferInTx(
     return { ok: false, message: 'Un animal de l’offre n’appartient pas à ce client.' };
   }
 
+  // 2. Plan d'offre (validation + prix) : aucune écriture si invalide.
   const categoryIds = [...new Set(input.segments.map((s) => s.categoryId))];
   const categories = await tx
     .select()
     .from(housingCategories)
     .where(inArray(housingCategories.id, categoryIds));
-  const catById = new Map(categories.map((c) => [c.id, c]));
-  if (catById.size !== categoryIds.length) {
-    return { ok: false, message: 'Une catégorie de l’offre est introuvable.' };
-  }
-
-  // 2. Validation : ranges valides, capacité respectée par segment, couverture exacte.
-  const stayNights = nightsBetween(startStr, endStr);
-  if (stayNights.length < 1) return { ok: false, message: 'Séjour trop court.' };
-
-  for (const seg of input.segments) {
-    const cat = catById.get(seg.categoryId)!;
-    if (toDateString(seg.startDate) >= toDateString(seg.endDate)) {
-      return { ok: false, message: 'Une période de segment est invalide.' };
-    }
-    if (seg.petIds.length === 0) return { ok: false, message: 'Un segment est sans animal.' };
-    if (seg.petIds.length > cat.capacity) {
-      return {
-        ok: false,
-        message: `Capacité dépassée pour « ${cat.name} » (max ${cat.capacity} animal/animaux par espace).`,
-      };
-    }
-  }
-  const coverageError = validateCoverage(allPetIds, input.segments, stayNights);
-  if (coverageError) return { ok: false, message: coverageError };
-
-  // 3. Prix (par segment : base + supplément/animal au-delà du 1er).
-  const pricedSegments = input.segments.map((seg) => {
-    const cat = catById.get(seg.categoryId)!;
-    const nights = nightsBetween(seg.startDate, seg.endDate).length;
-    const price = computeSegmentPrice({
-      nights,
-      basePricePerNight: cat.basePricePerNight,
-      surchargePerAnimal: cat.surchargePerAnimal,
-      petCount: seg.petIds.length,
-    });
-    return { ...seg, nights, price, category: cat };
+  const plan = buildOfferPlan({
+    checkInDate: input.checkInDate,
+    checkOutDate: input.checkOutDate,
+    segments: input.segments,
+    categories,
   });
+  if (!plan.ok) return plan;
 
-  const totalPrice = pricedSegments.reduce((sum, s) => sum + s.price, 0);
-  const depositAmount = computeDepositAmount(totalPrice, opts.depositPercent);
-
-  // 4. Booking (statut `offered` — segments bloquants).
-  const now = new Date();
-  const offeredExpiresAt = new Date(now.getTime() + opts.offerValidityHours * 3600 * 1000);
+  // 3. Booking `offered` — segments bloquants.
+  const startStr = toDateString(input.checkInDate);
+  const endStr = toDateString(input.checkOutDate);
+  const depositAmount = computeDepositAmount(plan.totalPrice, opts.depositPercent);
+  const offeredExpiresAt = new Date(Date.now() + opts.offerValidityHours * 3600 * 1000);
 
   const [newBooking] = await tx
     .insert(bookings)
@@ -179,7 +107,7 @@ async function createOfferInTx(
       clientId: input.clientId,
       status: 'offered',
       source: input.source ?? 'phone',
-      totalPrice,
+      totalPrice: plan.totalPrice,
       depositAmount,
       paymentStatus: 'unpaid',
       checkInDate: new Date(`${startStr}T00:00:00Z`),
@@ -188,42 +116,21 @@ async function createOfferInTx(
     })
     .returning({ id: bookings.id });
 
-  // 5. Segments + attribution atomique d'unité + animaux par segment.
-  for (const seg of pricedSegments) {
-    const created = await createBookingSegmentTx(tx, {
-      bookingId: newBooking.id,
-      categoryId: seg.categoryId,
-      checkInDate: seg.startDate,
-      checkOutDate: seg.endDate,
-      segmentPrice: seg.price,
-      autoAssign: true,
-    });
-    if (!created.ok) {
-      return { ok: false, message: created.message };
-    }
-    if (created.unitId == null) {
-      return { ok: false, message: 'Attribution de box impossible pour un segment.' };
-    }
-    await tx.insert(segmentPets).values(
-      seg.petIds.map((petId) => ({ segmentId: created.segmentId, petId }))
-    );
-  }
+  const segmentError = await insertPlanSegments(tx, newBooking.id, plan.segments);
+  if (segmentError) return { ok: false, message: segmentError };
 
   return {
     ok: true,
     bookingId: newBooking.id,
-    totalPrice,
+    totalPrice: plan.totalPrice,
     depositAmount,
     offeredExpiresAt,
   };
 }
 
-export type AttachOfferInput = {
-  bookingId: string;
-  checkInDate: string;
-  checkOutDate: string;
-  segments: OfferSegmentInput[];
-};
+// ---------------------------------------------------------------------------
+// Demande web → offre (booking `requested` existant)
+// ---------------------------------------------------------------------------
 
 async function attachOfferInTx(
   tx: Tx,
@@ -241,13 +148,6 @@ async function attachOfferInTx(
     return { ok: false, message: 'Seule une demande en attente peut recevoir une offre.' };
   }
 
-  const startStr = toDateString(input.checkInDate);
-  const endStr = toDateString(input.checkOutDate);
-  if (startStr >= endStr) {
-    return { ok: false, message: 'La date de sortie doit être postérieure à la date d’entrée.' };
-  }
-
-  // Client + animaux + catégories.
   const clientPets = await tx
     .select({ id: pets.id })
     .from(pets)
@@ -264,49 +164,24 @@ async function attachOfferInTx(
     .select()
     .from(housingCategories)
     .where(inArray(housingCategories.id, categoryIds));
-  const catById = new Map(categories.map((c) => [c.id, c]));
-  if (catById.size !== categoryIds.length) {
-    return { ok: false, message: 'Une catégorie de l’offre est introuvable.' };
-  }
-
-  // Validation (ranges, capacité, couverture).
-  const stayNights = nightsBetween(startStr, endStr);
-  for (const seg of input.segments) {
-    const cat = catById.get(seg.categoryId)!;
-    if (toDateString(seg.startDate) >= toDateString(seg.endDate)) {
-      return { ok: false, message: 'Une période de segment est invalide.' };
-    }
-    if (seg.petIds.length === 0) return { ok: false, message: 'Un segment est sans animal.' };
-    if (seg.petIds.length > cat.capacity) {
-      return {
-        ok: false,
-        message: `Capacité dépassée pour « ${cat.name} » (max ${cat.capacity} par espace).`,
-      };
-    }
-  }
-  const coverageError = validateCoverage(allPetIds, input.segments, stayNights);
-  if (coverageError) return { ok: false, message: coverageError };
-
-  const pricedSegments = input.segments.map((seg) => {
-    const cat = catById.get(seg.categoryId)!;
-    const nights = nightsBetween(seg.startDate, seg.endDate).length;
-    const price = computeSegmentPrice({
-      nights,
-      basePricePerNight: cat.basePricePerNight,
-      surchargePerAnimal: cat.surchargePerAnimal,
-      petCount: seg.petIds.length,
-    });
-    return { ...seg, nights, price, category: cat };
+  const plan = buildOfferPlan({
+    checkInDate: input.checkInDate,
+    checkOutDate: input.checkOutDate,
+    segments: input.segments,
+    categories,
   });
-  const totalPrice = pricedSegments.reduce((sum, s) => sum + s.price, 0);
-  const depositAmount = computeDepositAmount(totalPrice, opts.depositPercent);
+  if (!plan.ok) return plan;
+
+  const startStr = toDateString(input.checkInDate);
+  const endStr = toDateString(input.checkOutDate);
+  const depositAmount = computeDepositAmount(plan.totalPrice, opts.depositPercent);
   const offeredExpiresAt = new Date(Date.now() + opts.offerValidityHours * 3600 * 1000);
 
   await tx
     .update(bookings)
     .set({
       status: 'offered',
-      totalPrice,
+      totalPrice: plan.totalPrice,
       depositAmount,
       paymentStatus: 'unpaid',
       checkInDate: new Date(`${startStr}T00:00:00Z`),
@@ -315,31 +190,44 @@ async function attachOfferInTx(
     })
     .where(eq(bookings.id, booking.id));
 
-  for (const seg of pricedSegments) {
+  const segmentError = await insertPlanSegments(tx, booking.id, plan.segments);
+  if (segmentError) return { ok: false, message: segmentError };
+
+  return {
+    ok: true,
+    bookingId: booking.id,
+    totalPrice: plan.totalPrice,
+    depositAmount,
+    offeredExpiresAt,
+  };
+}
+
+/** Crée les segments validés du plan + lie les animaux. Retourne null si OK. */
+async function insertPlanSegments(
+  tx: Tx,
+  bookingId: string,
+  segments: PricedOfferSegment[]
+): Promise<string | null> {
+  for (const seg of segments) {
     const created = await createBookingSegmentTx(tx, {
-      bookingId: booking.id,
+      bookingId,
       categoryId: seg.categoryId,
       checkInDate: seg.startDate,
       checkOutDate: seg.endDate,
       segmentPrice: seg.price,
       autoAssign: true,
     });
-    if (!created.ok) return { ok: false, message: created.message };
+    if (!created.ok) {
+      return created.message;
+    }
     if (created.unitId == null) {
-      return { ok: false, message: 'Attribution de box impossible pour un segment.' };
+      return 'Attribution de box impossible pour un segment.';
     }
     await tx.insert(segmentPets).values(
       seg.petIds.map((petId) => ({ segmentId: created.segmentId, petId }))
     );
   }
-
-  return {
-    ok: true,
-    bookingId: booking.id,
-    totalPrice,
-    depositAmount,
-    offeredExpiresAt,
-  };
+  return null;
 }
 
 /**
