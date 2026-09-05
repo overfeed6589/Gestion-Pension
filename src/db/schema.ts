@@ -307,6 +307,10 @@ export const bookings = pgTable('bookings', {
   cancelledReason: text('cancelled_reason'),
   refundedAt: timestamp('refunded_at'),
 
+  // Demande publique (Phase G — Lot 2) : consentement RGPD horodaté + message.
+  rgpdConsentAt: timestamp('rgpd_consent_at'),
+  requestNotes: text('request_notes'),
+
   // Option A : Notes simples pour le check-in
   dietNotes: text('diet_notes'),
   belongingsNotes: text('belongings_notes'),

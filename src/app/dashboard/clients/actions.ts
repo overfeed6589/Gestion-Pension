@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { clients, pets } from '@/db/schema';
-import { createClientWithPetSchema } from '@/lib/validations/client-pet';
+import { createClientWithPetSchema, createPetSchema } from '@/lib/validations/client-pet';
 import { ActionState } from '@/types/actions';
 import { requireRole } from '@/lib/auth';
 
@@ -97,5 +97,53 @@ export async function createClientWithPetAction(
       return { success: false, message: 'Un client avec cet email existe déjà.' };
     }
     return { success: false, message: "Erreur lors de la création du dossier." };
+  }
+}
+
+/**
+ * Ajoute un animal à un client EXISTANT (flux demande web → fiche complète).
+ * Champs légaux minimaux : nom, espèce, sexe, n° I-CAD (puce/tatouage).
+ */
+export async function createPetForClientAction(
+  prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireRole('secretary');
+
+  const clientId = formData.get('clientId');
+  const rawData = {
+    name: formData.get('name'),
+    species: formData.get('species'),
+    breed: formData.get('breed') || undefined,
+    sex: formData.get('sex'),
+    isSterilized: formData.get('isSterilized') === 'on' || formData.get('isSterilized') === 'true',
+    birthDate: formData.get('birthDate') || undefined,
+    identificationNumber: formData.get('identificationNumber'),
+    passportNumber: formData.get('passportNumber') || undefined,
+    veterinarianName: formData.get('veterinarianName') || undefined,
+    veterinarianPhone: formData.get('veterinarianPhone') || undefined,
+    vaccinesUpToDate: formData.get('vaccinesUpToDate') !== 'false',
+    vaccines: [],
+  };
+
+  const validated = createPetSchema.safeParse(rawData);
+  if (!validated.success) {
+    return {
+      success: false,
+      message: 'Certains champs sont invalides.',
+      errors: validated.error.flatten().fieldErrors,
+    };
+  }
+  if (typeof clientId !== 'string' || !clientId) {
+    return { success: false, message: 'Client introuvable.' };
+  }
+
+  try {
+    await db.insert(pets).values({ clientId, ...validated.data });
+    revalidatePath('/dashboard/clients');
+    return { success: true, message: 'Animal ajouté au dossier.' };
+  } catch (error) {
+    console.error('createPetForClientAction :', error);
+    return { success: false, message: "Erreur lors de l'ajout de l'animal." };
   }
 }

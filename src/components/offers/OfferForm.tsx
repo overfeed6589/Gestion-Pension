@@ -1,8 +1,8 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { createBookingWithOfferAction } from '@/app/dashboard/offres/actions';
-import type { CreateOfferInput } from '@/lib/booking-offers';
+import Link from 'next/link';
+import { upsertOfferAction, type OfferMutationInput } from '@/app/dashboard/offres/actions';
 import type { ActionState } from '@/types/actions';
 
 type CategoryOption = {
@@ -23,6 +23,8 @@ type ClientOption = {
 export type OfferFormProps = {
   clients: ClientOption[];
   categories: CategoryOption[];
+  /** Mode « demande web » : on transforme un booking `requested` existant. */
+  existing?: { bookingId: string; clientId: string; startDate: string; endDate: string };
 };
 
 type Row = { startDate: string; endDate: string; categoryId: string };
@@ -42,16 +44,20 @@ function todayPlus(days: number): string {
 
 const initialActionState: ActionState = { success: false };
 
-export function OfferForm({ clients, categories }: OfferFormProps) {
+export function OfferForm({ clients, categories, existing }: OfferFormProps) {
   const [state, formAction, isPending] = useActionState(
-    async (_prev: ActionState, payload: CreateOfferInput) => createBookingWithOfferAction(payload),
+    async (_prev: ActionState, payload: OfferMutationInput) => upsertOfferAction(payload),
     initialActionState
   );
 
-  const [clientId, setClientId] = useState(clients[0]?.id ?? '');
+  const [clientId, setClientId] = useState(existing?.clientId ?? clients[0]?.id ?? '');
   const [selectedPetIds, setSelectedPetIds] = useState<string[]>([]);
   const [rows, setRows] = useState<Row[]>([
-    { startDate: todayPlus(0), endDate: todayPlus(7), categoryId: categories[0]?.id ?? '' },
+    {
+      startDate: existing?.startDate ?? todayPlus(0),
+      endDate: existing?.endDate ?? todayPlus(7),
+      categoryId: categories[0]?.id ?? '',
+    },
   ]);
 
   const selectedClient = clients.find((c) => c.id === clientId);
@@ -68,50 +74,74 @@ export function OfferForm({ clients, categories }: OfferFormProps) {
 
   const submit = () => {
     if (rows.length === 0 || selectedPetIds.length === 0 || !clientId) return;
-    formAction({
-      clientId,
-      checkInDate: rows[0].startDate,
-      checkOutDate: rows[rows.length - 1].endDate,
-      segments: rows.map((row) => ({
-        startDate: row.startDate,
-        endDate: row.endDate,
-        categoryId: row.categoryId,
-        petIds: [...selectedPetIds],
-      })),
-      source: 'phone',
-    });
+    const segments = rows.map((row) => ({
+      startDate: row.startDate,
+      endDate: row.endDate,
+      categoryId: row.categoryId,
+      petIds: [...selectedPetIds],
+    }));
+
+    const payload: OfferMutationInput = existing
+      ? {
+          kind: 'attach',
+          bookingId: existing.bookingId,
+          checkInDate: rows[0].startDate,
+          checkOutDate: rows[rows.length - 1].endDate,
+          segments,
+        }
+      : {
+          kind: 'create',
+          clientId,
+          checkInDate: rows[0].startDate,
+          checkOutDate: rows[rows.length - 1].endDate,
+          segments,
+          source: 'phone',
+        };
+
+    formAction(payload);
   };
 
   return (
     <div className="bg-white border rounded-xl p-5 space-y-5 shadow-sm">
       <div>
-        <h2 className="font-semibold text-lg">Nouvelle offre de séjour</h2>
+        <h2 className="font-semibold text-lg">
+          {existing ? 'Créer l’offre (depuis la demande web)' : 'Nouvelle offre de séjour'}
+        </h2>
         <p className="text-xs text-slate-500">
           Les espaces sont bloqués dès la création. L’acompte (défaut 30 %) confirme la réservation.
         </p>
       </div>
 
       {/* Client */}
-      <label className="block text-sm font-medium">
-        Client
-        <select
-          className="mt-1 w-full border rounded p-2 text-sm"
-          value={clientId}
-          onChange={(e) => {
-            setClientId(e.target.value);
-            setSelectedPetIds([]);
-          }}
-        >
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.firstName} {c.lastName}
-            </option>
-          ))}
-        </select>
-      </label>
+      {existing ? (
+        <p className="text-sm">
+          <span className="text-slate-500">Client : </span>
+          <span className="font-medium">
+            {selectedClient?.firstName} {selectedClient?.lastName}
+          </span>
+        </p>
+      ) : (
+        <label className="block text-sm font-medium">
+          Client
+          <select
+            className="mt-1 w-full border rounded p-2 text-sm"
+            value={clientId}
+            onChange={(e) => {
+              setClientId(e.target.value);
+              setSelectedPetIds([]);
+            }}
+          >
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.firstName} {c.lastName}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {/* Animaux */}
-      {selectedClient && selectedClient.pets.length > 0 && (
+      {selectedClient && selectedClient.pets.length > 0 ? (
         <div>
           <p className="text-sm font-medium mb-1">Animaux du séjour</p>
           <div className="flex flex-wrap gap-2">
@@ -134,9 +164,14 @@ export function OfferForm({ clients, categories }: OfferFormProps) {
             })}
           </div>
         </div>
-      )}
-      {selectedClient && selectedClient.pets.length === 0 && (
-        <p className="text-xs text-amber-600">Ce client n’a pas encore d’animal : ajoutez-en dans Clients.</p>
+      ) : (
+        <p className="text-xs text-amber-600">
+          Ce client n’a pas encore d’animal :{' '}
+          <Link href="/dashboard/clients" className="underline">
+            ajoutez sa fiche (I-CAD, vaccins)
+          </Link>{' '}
+          avant de créer l’offre.
+        </p>
       )}
 
       {/* Segments (découpage temporel — ex: 11 j type A + 2 j type B) */}
@@ -213,7 +248,11 @@ export function OfferForm({ clients, categories }: OfferFormProps) {
         onClick={submit}
         className="w-full bg-slate-900 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-40"
       >
-        {isPending ? 'Création…' : 'Créer l’offre (bloque les espaces)'}
+        {isPending
+          ? 'Création…'
+          : existing
+            ? 'Transformer la demande en offre'
+            : 'Créer l’offre (bloque les espaces)'}
       </button>
 
       {state.message && (

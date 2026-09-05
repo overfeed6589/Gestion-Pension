@@ -4,11 +4,46 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { bookings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { createBookingWithOffer, type CreateOfferInput } from '@/lib/booking-offers';
+import { createBookingWithOffer, attachOfferToBooking, type CreateOfferInput, type AttachOfferInput } from '@/lib/booking-offers';
 import { createDepositCheckoutSession } from '@/lib/integrations/stripe';
 import { cancelBooking } from '@/lib/payments';
 import { ActionState } from '@/types/actions';
 import { requireRole } from '@/lib/auth';
+
+/** Union : création depuis zéro OU transformation d'une demande (`requested`). */
+export type OfferMutationInput =
+  | ({ kind: 'create' } & CreateOfferInput)
+  | ({ kind: 'attach' } & AttachOfferInput);
+
+/**
+ * Crée une offre (segments bloquants) soit sur un nouveau booking, soit sur une
+ * demande web existante. Rôle `secretary`.
+ */
+export async function upsertOfferAction(input: OfferMutationInput): Promise<ActionState> {
+  await requireRole('secretary');
+
+  const result =
+    input.kind === 'create'
+      ? await createBookingWithOffer(input)
+      : await attachOfferToBooking(input);
+
+  if (!result.ok) {
+    return { success: false, message: result.message };
+  }
+
+  revalidatePath('/dashboard/offres');
+  revalidatePath('/dashboard/register');
+  if (input.kind === 'attach') revalidatePath(`/dashboard/offres/nouvelle`);
+
+  return {
+    success: true,
+    message:
+      input.kind === 'attach'
+        ? 'Demande transformée en offre : espaces bloqués. Envoyez le lien d’acompte au client.'
+        : 'Offre créée et espaces bloqués. Envoyez le lien d’acompte au client.',
+    data: { bookingId: result.bookingId, depositAmount: result.depositAmount },
+  };
+}
 
 /**
  * Crée une réservation + offre (segments bloquants) — rôle `secretary`

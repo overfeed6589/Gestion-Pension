@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { db } from '@/db';
 import { bookings } from '@/db/schema';
 import { ne } from 'drizzle-orm';
@@ -47,6 +48,7 @@ export default async function OffresPage() {
   ]);
 
   const activeBookings = latestBookings.filter((b) => b.status === 'offered');
+  const webRequests = latestBookings.filter((b) => b.status === 'requested' && b.source === 'web');
 
   return (
     <div className="space-y-8">
@@ -57,6 +59,34 @@ export default async function OffresPage() {
           réservation et émet la facture d’acompte.
         </p>
       </div>
+
+      {webRequests.length > 0 && (
+        <div className="bg-white border rounded-xl p-4 space-y-3">
+          <h2 className="font-semibold">Demandes web à traiter ({webRequests.length})</h2>
+          {webRequests.map((booking) => (
+            <div key={booking.id} className="border-b pb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">
+                  {booking.client?.firstName} {booking.client?.lastName}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Arrivée {booking.checkInDate.toISOString().slice(0, 10)} →{' '}
+                  {booking.checkOutDate.toISOString().slice(0, 10)}
+                </p>
+                {booking.requestNotes && (
+                  <p className="text-xs text-slate-400 mt-0.5">{booking.requestNotes}</p>
+                )}
+              </div>
+              <Link
+                href={`/dashboard/offres/nouvelle?demande=${booking.id}`}
+                className="bg-slate-900 text-white text-xs font-medium py-1.5 px-3 rounded whitespace-nowrap"
+              >
+                Créer l’offre →
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <div className="lg:col-span-2">

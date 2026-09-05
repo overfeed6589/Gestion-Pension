@@ -1,6 +1,7 @@
 import { db } from '@/db';
 import { requireRole } from '@/lib/auth';
 import { ClientPetForm } from '@/components/clients/ClientPetForm';
+import { PetAddForm } from '@/components/clients/PetAddForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,16 +37,21 @@ export default async function ClientsPage() {
             </p>
           ) : (
             clients.map((client) => (
-              <div key={client.id} className="bg-white border rounded-xl p-4 flex items-center justify-between gap-4 shadow-sm">
-                <div>
-                  <p className="font-semibold">
-                    {client.firstName} {client.lastName}
-                  </p>
-                  <p className="text-xs text-slate-500">{client.email} • {client.phone}</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Animaux : {client.pets.map((p) => p.name).join(', ') || '—'} •
-                    Réservations : {client.bookings.length}
-                  </p>
+              <div key={client.id} className="bg-white border rounded-xl p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-semibold">
+                      {client.firstName} {client.lastName}
+                    </p>
+                    <p className="text-xs text-slate-500">{client.email} • {client.phone}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Animaux : {client.pets.map((p) => p.name).join(', ') || '—'} •
+                      Réservations : {client.bookings.length}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-2 border-t pt-2">
+                  <PetAddForm clientId={client.id} />
                 </div>
               </div>
             ))
