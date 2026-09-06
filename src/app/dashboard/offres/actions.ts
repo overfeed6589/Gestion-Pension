@@ -77,7 +77,7 @@ export async function createDepositPaymentLinkAction(bookingId: string): Promise
 
   try {
     const booking = await db.query.bookings.findFirst({
-      where: { RAW: () => eq(bookings.id, bookingId) },
+      where: { RAW: (t) => eq(t.id, bookingId) },
       with: {
         client: true,
         segments: { with: { category: true } },

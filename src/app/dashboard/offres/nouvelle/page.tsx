@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { db } from '@/db';
-import { bookings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth';
 import { OfferForm } from '@/components/offers/OfferForm';
@@ -31,7 +30,7 @@ export default async function NouvelleOffrePage({
 
   if (demandeId) {
     const demande = await db.query.bookings.findFirst({
-      where: { RAW: () => eq(bookings.id, demandeId) },
+      where: { RAW: (t) => eq(t.id, demandeId) },
       with: { client: { with: { pets: true } } },
     });
     if (!demande) {

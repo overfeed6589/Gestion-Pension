@@ -43,7 +43,7 @@ async function loadBookingForInvoice(tx: Tx, bookingId: string) {
   //    l'alias `Tx` ne porte pas les relations typées : on passe par le type db).
   const relational = tx as unknown as typeof db;
   const booking = await relational.query.bookings.findFirst({
-    where: { RAW: () => eq(bookings.id, bookingId) },
+    where: { RAW: (t) => eq(t.id, bookingId) },
     with: {
       client: true,
       payments: true,
@@ -75,7 +75,7 @@ export async function generateBookingInvoice(
   // Idempotence : pas de double facture pour (booking, type) tant qu'elle n'est pas annulée.
   const relational = tx as unknown as typeof db;
   const existing = await relational.query.invoices.findMany({
-    where: { RAW: () => eq(invoices.bookingId, booking.id) },
+    where: { RAW: (t) => eq(t.bookingId, booking.id) },
   });
   const already = existing.find((inv) => inv.type === type && inv.status !== 'cancelled');
 

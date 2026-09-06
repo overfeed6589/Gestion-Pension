@@ -43,7 +43,7 @@ export default async function DashboardHomePage() {
     <div className="bg-white border rounded-xl p-5 shadow-sm">
       <p className="text-xs text-slate-500 uppercase tracking-wide">{label}</p>
       <p className="text-2xl font-bold mt-1">{value}</p>
-      {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-slate-600 mt-1">{hint}</p>}
     </div>
   );
 
@@ -68,7 +68,7 @@ export default async function DashboardHomePage() {
         {card('Départs aujourd’hui', statusCounts[0]?.departuresToday ?? 0)}
         <div className="bg-white border rounded-xl p-5 flex items-center justify-between">
           <p className="text-xs text-slate-500 uppercase tracking-wide">Se connecter pour les détails</p>
-          <p className="text-xs text-slate-400">{user.email}</p>
+          <p className="text-xs text-slate-500">{user.email}</p>
         </div>
       </div>
 

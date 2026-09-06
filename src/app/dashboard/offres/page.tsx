@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { db } from '@/db';
-import { bookings } from '@/db/schema';
 import { ne } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth';
 import { OfferForm } from '@/components/offers/OfferForm';
@@ -41,7 +40,7 @@ export default async function OffresPage() {
           },
         },
       },
-      where: { RAW: () => ne(bookings.status, 'cancelled') },
+      where: { RAW: (t) => ne(t.status, 'cancelled') },
       orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
       limit: 50,
     }),
@@ -74,7 +73,7 @@ export default async function OffresPage() {
                   {booking.checkOutDate.toISOString().slice(0, 10)}
                 </p>
                 {booking.requestNotes && (
-                  <p className="text-xs text-slate-400 mt-0.5">{booking.requestNotes}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">{booking.requestNotes}</p>
                 )}
               </div>
               <Link

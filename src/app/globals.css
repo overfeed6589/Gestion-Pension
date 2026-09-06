@@ -1,1 +1,27 @@
 @import "tailwindcss";
+
+/*
+ * Tokens de thème « shadcn-like » utilisés par les pages (bg-card,
+ * text-muted-foreground, border-border, ring-primary, …). Ils n'existaient pas :
+ * ces classes n'étaient pas générées (rendu incohérent). Palette slate avec un
+ * `muted-foreground` suffisamment contrasté pour rester lisible sur blanc.
+ */
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #475569; /* slate-600 — lisible sur blanc */
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #0f172a;
+  --color-primary: #0f172a;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #0f172a;
+  --color-border: #e2e8f0;
+  --color-input: #cbd5e1;
+  --color-ring: #0f172a;
+  --color-destructive: #b91c1c;
+  --color-destructive-foreground: #ffffff;
+}

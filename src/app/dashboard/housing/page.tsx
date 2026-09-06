@@ -63,7 +63,7 @@ export default async function HousingManagementPage() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                   {category.units.length === 0 && (
-                    <p className="text-xs text-slate-400 italic col-span-full">
+                    <p className="text-xs text-slate-500 italic col-span-full">
                       Aucun box : ajoutez-en pour pouvoir attribuer les séjours.
                     </p>
                   )}
