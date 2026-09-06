@@ -18,6 +18,7 @@ import { defineRelations } from 'drizzle-orm';
 
 export const BOOKING_STATUSES = [
   'requested',   // Demande reçue (web/téléphone) — pas encore d'offre (aucun segment)
+  'proposed',    // Demande publique choisie — segments BLOQUANTS, en attente de validation staff (G9)
   'offered',     // Offre émise — segments créés et BLOQUANTS, acompte en attente
   'expired',     // Offre non honorée dans le délai (expiration) — segments libérés
   'confirmed',   // Validée (acompte reçu)
@@ -170,6 +171,13 @@ export const pensionSettings = pgTable('pension_settings', {
   offerValidityHours: integer('offer_validity_hours').default(72).notNull(),
   publicDomain: text('public_domain'),
   logoUrl: text('logo_url'),
+
+  // Créneaux horaires proposés au client (G9) — listes de libellés (ex: "9h-11h").
+  arrivalSlots: jsonb('arrival_slots').$type<string[]>(),
+  departureSlots: jsonb('departure_slots').$type<string[]>(),
+  // Jours de relance pour les créneaux non renseignés avant l'arrivée (défaut 15/7/1).
+  reminderDays: jsonb('reminder_days').$type<number[]>(),
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -195,6 +203,10 @@ export const clients = pgTable('clients', {
   vatNumber: varchar('vat_number', { length: 32 }),
   isB2b: boolean('is_b2b').default(false).notNull(),
 
+  // Jeton dossier (G9) : généré à la première demande, envoyé par email → ouvre
+  // /espace/<token> (toutes les réservations du client). Unique.
+  accessToken: text('access_token').unique(),
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -212,7 +224,7 @@ export const pets = pgTable('pets', {
   birthDate: date('birth_date'),
   
   // Registre réglementaire français
-  identificationNumber: text('identification_number').notNull(), // N° Puce / Tatouage
+  identificationNumber: text('identification_number'), // N° Puce / Tatouage (nullable : saisi plus tard par le client — G9)
   passportNumber: text('passport_number'),
   veterinarianName: text('veterinarian_name'),
   veterinarianPhone: text('veterinarian_phone'),
@@ -310,6 +322,11 @@ export const bookings = pgTable('bookings', {
   // Demande publique (Phase G — Lot 2) : consentement RGPD horodaté + message.
   rgpdConsentAt: timestamp('rgpd_consent_at'),
   requestNotes: text('request_notes'),
+
+  // Créneaux d'arrivée/départ choisis par le client (G9) — valeurs des listes
+  // configurables dans pension_settings.arrivalSlots / departureSlots.
+  arrivalTimeSlot: text('arrival_time_slot'),
+  departureTimeSlot: text('departure_time_slot'),
 
   // Option A : Notes simples pour le check-in
   dietNotes: text('diet_notes'),
@@ -443,6 +460,31 @@ export const auditLogs = pgTable('audit_logs', {
 }, (table) => ({
   entityIdx: index('audit_logs_entity_idx').on(table.entityType, table.entityId),
 }));
+
+// ==========================================
+// 10ter. EMAILS SORTANTS & LIENS DE REPRISE CLIENT (G9)
+// ==========================================
+// outbound_emails : journal des envois (dédup des emails transactionnels).
+export const outboundEmails = pgTable('outbound_emails', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'cascade' }).notNull(),
+  kind: text('kind').notNull(), // ex: 'confirmation_demande', 'liens_paiement', 'heures_relance_15'…
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+  metadata: jsonb('metadata'),
+}, (table) => ({
+  bookingKindIdx: index('outbound_emails_booking_kind_idx').on(table.bookingId, table.kind),
+}));
+
+// client_resume_links : « lien unique » envoyé par email à un client connu pour
+// reprendre/continuer (préremplissage) — usage unique + expiration.
+export const clientResumeLinks = pgTable('client_resume_links', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  clientId: uuid('client_id').references(() => clients.id, { onDelete: 'cascade' }).notNull(),
+  token: text('token').notNull().unique(),
+  expiresAt: timestamp('expires_at').notNull(),
+  usedAt: timestamp('used_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 // ==========================================
 // 11. FACTURATION CLIENT (VENTES)

@@ -73,6 +73,22 @@ Répartition déterministe vs LLM (validée) :
 - Table `pension_settings` (1 ligne) : identité, légal, acompte %, domaine
   public, catégories exposées.
 
+### Parcours réservation v2 (dans l'itération 1)
+> Voir `docs/parcours-client-emails.md` (machine à états + matrice emails).
+
+- Demande publique en étapes : dates → email (client connu = lien de reprise
+  prérempli ; inconnu = saisie libre) → choix des animaux → propositions de
+  disponibilité (catégories complètes + splits mixtes) → saisie des nouveaux
+  animaux.
+- Hold bloquant dès la demande (statut `proposed`), espaces réservés.
+- Validation staff (mini-éditeur secretary/owner) avant envoi du paiement ;
+  validation « sans paiement » possible.
+- Dossier client par jeton (`/espace/<jeton>`, pas de compte) : complétion
+  animaux, créneaux arrivée/départ, paiement **acompte ou total** à montant
+  choisi (facture finale immédiate si total payé).
+- Emails automatisés (confirmation, paiement, complétion, créneaux) + relances
+  créneaux J-15/7/1, dédupliquées.
+
 ### Hors périmètre itération 1 (non-goals)
 - Lecture/triage de la boîte mail partagée + brouillons IA.
 - WhatsApp/SMS effectifs (interface seulement, prête pour itération 2).

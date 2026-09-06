@@ -244,11 +244,57 @@ Document produit : `docs/ROADMAP.md`. Décisions de cadrage :
 - Numérotation : séquence atomique (plus de trous/race).
 - Règles de relance/remboursement : fenêtre ≥ 7 j vs < 7 j.
 
+### G9. Parcours client v2 (hold `proposed`, dossier par jeton, paiement à montant choisi)
+
+Décisions (grill) et matrice emails : `docs/parcours-client-emails.md`.
+
+**Base de données (migration versionnée unique)**
+- `BOOKING_STATUSES` : + `proposed` (demande publique qui **bloque** des espaces,
+  en attente de validation staff). `requested` reste pour l'héritage.
+- `clients` : + `accessToken` (unique, nullable) — jeton dossier généré à la 1re
+  demande, lié dans les emails (`/espace/<token>`).
+- `pets` : `identification_number` devient **nullable** (saisie publique sans
+  I-CAD ; la complétion se fait ensuite via le dossier).
+- `bookings` : + `arrivalTimeSlot`, `departureTimeSlot` (text, créneaux choisis).
+- Nouvelle table `outbound_emails` : (bookingId, kind, sentAt) → dédup des emails
+  (un kind par booking ; les relances créneaux ont un kind par jalon).
+- Nouvelle table `client_resume_links` : lien de reprise pour client connu
+  (clientId, token unique, expiresAt, usedAt) — usage unique + expiration.
+- `pension_settings` : + `arrivalSlots`, `departureSlots` (jsonb string[]),
+  `reminderDays` (jsonb int[], défaut [15,7,1]).
+
+**Flux public (étapes)** : dates → email (connu = lien de reprise qui préremplit ;
+inconnu = saisie libre) → choix des animaux (cocher/ajouter) → propositions de
+dispo (catégories complètes + splits, nb espaces = ⌈chats/capacité⌉) → saisie
+animaux neufs → création `proposed` (segments bloquants) + jeton + email E1.
+
+**Dispo publique** : réutilise `lib/scheduling/` (checker par unité, occupation) ;
+propositions = catégorie libre sur toute la durée OU découpage mixte suggéré.
+
+**Staff** : `/dashboard/offres` liste les `proposed` → mini-éditeur (ajuster
+dates/catégorie/animaux = recréation des segments + recalcul prix/acompte,
+secretary/owner) → « valider & envoyer liens » (`offered`) ou « valider sans
+paiement » (`confirmed`, lien solde maintenu).
+
+**Paiement à montant choisi** : depuis `/espace/<token>`, le client choisit
+acompte ou total ; une action serveur crée la session Stripe du montant choisi
+(statut/montant périmé → refus). Total payé → `fully_paid` + **facture finale
+immédiate** (générée puis `paid`) ; acompte → `confirmed` ; lien « solde »
+recalculé.
+
+**Emails/cron** : lib `lib/emails/` (templates par kind, écriture
+`outbound_emails`), cron enrichi (E7 relances créneaux J-15/7/1, E10 acompte,
+E11 solde). Réglages dans Paramètres.
+
+**Sécurité** : pages `/espace` sans auth mais lookup par jeton (jamais loggé) ;
+lien de reprise à usage unique et court ; pas d'inscription publique ; les
+données d'un client ne sont jamais rendues sur simple saisie d'email.
+
 ---
 
 ## Ordre d'implémentation
 
 A1 → A2 → A4/A5 → B1/B2 → A3 (console) → C → D (migrations + CI + tests)
-→ **G (itération 1, cible mi-octobre)** → E → F.
+→ **G (itération 1, cible mi-octobre)** → **G9 (parcours client v2)** → E → F.
 Chaque étape : implémentation commentée → vérification (`npx tsc --noEmit`, `npm run lint`)
 → proposition de commit → validation manuelle.

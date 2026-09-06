@@ -9,6 +9,7 @@ import { formatCents } from '@/lib/money';
 export const dynamic = 'force-dynamic';
 
 const STATUS_LABELS: Record<string, string> = {
+  proposed: 'En attente de validation',
   offered: 'Offre en attente d’acompte',
   confirmed: 'Confirmée (acompte reçu)',
   checked_in: 'En garde',
