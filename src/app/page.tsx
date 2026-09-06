@@ -43,17 +43,22 @@ export default async function HomePage() {
             <div className="bg-white border rounded-xl p-5 space-y-3">
               <h2 className="font-semibold">Nos espaces</h2>
               {categories.map((cat) => (
-                <div key={cat.id} className="flex items-center justify-between text-sm border-b pb-2 last:border-0">
-                  <span>{cat.publicName || cat.name}</span>
-                  <span className="text-slate-500">
-                    {formatCents(cat.basePricePerNight)}/nuit
-                    {cat.surchargePerAnimal > 0
-                      ? ` + ${formatCents(cat.surchargePerAnimal)}/chat supplémentaire`
-                      : ''}
-                  </span>
+                <div key={cat.id} className="border-b pb-2 last:border-0 space-y-0.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{cat.publicName || cat.name}</span>
+                    <span className="text-slate-700 whitespace-nowrap pl-3">
+                      {formatCents(cat.basePricePerNight)}/nuit
+                      {cat.surchargePerAnimal > 0
+                        ? ` + ${formatCents(cat.surchargePerAnimal)}/chat supplémentaire`
+                        : ''}
+                    </span>
+                  </div>
+                  {(cat.publicDescription || cat.description) && (
+                    <p className="text-xs text-slate-700">{cat.publicDescription || cat.description}</p>
+                  )}
                 </div>
               ))}
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-600">
                 Capacité : un espace accueille jusqu’à 3 chats d’une même famille.
               </p>
             </div>

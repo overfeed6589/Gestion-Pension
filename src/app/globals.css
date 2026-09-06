@@ -19,9 +19,36 @@
   --color-primary-foreground: #ffffff;
   --color-secondary: #f1f5f9;
   --color-secondary-foreground: #0f172a;
-  --color-border: #e2e8f0;
-  --color-input: #cbd5e1;
+  --color-border: #cbd5e1;
+  --color-input: #ffffff;
   --color-ring: #0f172a;
   --color-destructive: #b91c1c;
   --color-destructive-foreground: #ffffff;
+}
+
+/*
+ * Lisibilité des formulaires : champs blancs, texte foncé, bordure bien visible.
+ * (Tailwind v4 ne met plus de couleur de bordure par défaut sur `border`.)
+ */
+@layer base {
+  input,
+  select,
+  textarea {
+    color: #0f172a;
+    background-color: #ffffff;
+    border: 1px solid #94a3b8;
+    border-radius: 0.5rem;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b;
+    opacity: 1;
+  }
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: 2px solid #0f172a;
+    outline-offset: 0;
+    border-color: #0f172a;
+  }
 }

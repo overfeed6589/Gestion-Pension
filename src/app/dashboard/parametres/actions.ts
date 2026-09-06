@@ -17,6 +17,17 @@ export async function savePensionSettingsAction(
 ): Promise<ActionState> {
   await requireRole('owner');
 
+  const splitList = (key: string): string[] =>
+    ((formData.get(key) as string) ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+  const splitNumbers = (key: string): number[] =>
+    splitList(key)
+      .map((s) => Number(s))
+      .filter((n) => Number.isFinite(n) && n > 0);
+
   const values = {
     pensionName: (formData.get('pensionName') as string)?.trim(),
     legalAddress: (formData.get('legalAddress') as string)?.trim() || null,
@@ -28,6 +39,9 @@ export async function savePensionSettingsAction(
     offerValidityHours: Number(formData.get('offerValidityHours')),
     publicDomain: (formData.get('publicDomain') as string)?.trim() || null,
     logoUrl: (formData.get('logoUrl') as string)?.trim() || null,
+    arrivalSlots: splitList('arrivalSlots'),
+    departureSlots: splitList('departureSlots'),
+    reminderDays: splitNumbers('reminderDays'),
   };
 
   if (!values.pensionName) return { success: false, message: 'Le nom de la pension est requis.' };
@@ -45,6 +59,12 @@ export async function savePensionSettingsAction(
     values.offerValidityHours < 1
   ) {
     return { success: false, message: 'Valeurs numériques invalides.' };
+  }
+  if (values.arrivalSlots.length === 0 || values.departureSlots.length === 0) {
+    return { success: false, message: 'Indiquez au moins un créneau arrivée et un créneau départ.' };
+  }
+  if (values.reminderDays.length === 0) {
+    return { success: false, message: 'Indiquez au moins un jour de relance (ex: 15,7,1).' };
   }
 
   try {

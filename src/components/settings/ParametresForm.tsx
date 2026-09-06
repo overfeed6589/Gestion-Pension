@@ -17,6 +17,9 @@ export type ParametresDefaults = {
   offerValidityHours: number;
   publicDomain: string;
   logoUrl: string;
+  arrivalSlots: string[];
+  departureSlots: string[];
+  reminderDays: number[];
 };
 
 export function ParametresForm({ defaults }: { defaults: ParametresDefaults }) {
@@ -80,6 +83,28 @@ export function ParametresForm({ defaults }: { defaults: ParametresDefaults }) {
         <div>
           <label className="text-sm font-medium">Domaine public (ex: reserve.chat-s-amuse.com)</label>
           <input name="publicDomain" defaultValue={defaults.publicDomain} className={input} />
+        </div>
+        <div>
+          <label className="text-sm font-medium">URL du logo</label>
+          <input name="logoUrl" defaultValue={defaults.logoUrl} className={input} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="text-sm font-medium">
+            Créneaux d’arrivée (séparés par des virgules)
+          </label>
+          <input name="arrivalSlots" defaultValue={defaults.arrivalSlots.join(', ')} className={input} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="text-sm font-medium">
+            Créneaux de départ (séparés par des virgules)
+          </label>
+          <input name="departureSlots" defaultValue={defaults.departureSlots.join(', ')} className={input} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="text-sm font-medium">
+            Jours de relance des heures avant l’arrivée (ex: 15, 7, 1)
+          </label>
+          <input name="reminderDays" defaultValue={defaults.reminderDays.join(', ')} className={input} />
         </div>
       </div>
 

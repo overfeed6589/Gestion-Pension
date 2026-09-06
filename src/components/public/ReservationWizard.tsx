@@ -40,6 +40,7 @@ export function ReservationWizard() {
   const [pets, setPets] = useState<PublicPetInput[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const setPet = (i: number, patch: Partial<PublicPetInput>) =>
     setPets((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
@@ -54,37 +55,42 @@ export function ReservationWizard() {
   const hasSplit = splitSegments.length > 0;
 
   const searchAvailability = async () => {
+    setLoading(true);
     setError(null);
-    const res = await proposeAvailabilityAction({
-      startDate: dates.startDate,
-      endDate: dates.endDate,
-      petCount,
-    });
-    if (!res.success || !res.data) {
-      setError(res.message ?? 'Erreur.');
-      return;
-    }
-    const avail = res.data as PublicAvailabilityResult;
-    setAvailability(avail);
-    if (avail.split && avail.split.ok) {
-      setSelected({
-        kind: 'split',
-        portions: avail.split.segments.map((s) => ({
-          categoryId: s.categoryId,
-          startDate: s.startDate,
-          endDate: s.endDate,
-        })),
+    try {
+      const res = await proposeAvailabilityAction({
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+        petCount,
       });
+      if (!res.success || !res.data) {
+        setError(res.message ?? 'Erreur.');
+        return;
+      }
+      const avail = res.data as PublicAvailabilityResult;
+      setAvailability(avail);
+      if (avail.split && avail.split.ok) {
+        setSelected({
+          kind: 'split',
+          portions: avail.split.segments.map((s) => ({
+            categoryId: s.categoryId,
+            startDate: s.startDate,
+            endDate: s.endDate,
+          })),
+        });
+      }
+      setPets(
+        Array.from({ length: petCount }, () => ({
+          name: '',
+          species: 'Chat',
+          sex: 'Mâle',
+          isSterilized: false,
+        }))
+      );
+      setStep(2);
+    } finally {
+      setLoading(false);
     }
-    setPets(
-      Array.from({ length: petCount }, () => ({
-        name: '',
-        species: 'Chat',
-        sex: 'Mâle',
-        isSterilized: false,
-      }))
-    );
-    setStep(2);
   };
 
   const startPets = () => {
@@ -105,13 +111,18 @@ export function ReservationWizard() {
       consent: true,
       requestNotes: null,
     };
+    setLoading(true);
     setError(null);
-    const res = await submitProposalAction(payload);
-    if (!res.success) {
-      setError(res.message ?? 'Erreur.');
-      return;
+    try {
+      const res = await submitProposalAction(payload);
+      if (!res.success) {
+        setError(res.message ?? 'Erreur.');
+        return;
+      }
+      setDone(true);
+    } finally {
+      setLoading(false);
     }
-    setDone(true);
   };
 
   if (done) {
@@ -170,8 +181,8 @@ export function ReservationWizard() {
               </select>
             </div>
           </div>
-          <button className={btn} onClick={searchAvailability}>
-            Voir les disponibilités →
+          <button className={btn} onClick={searchAvailability} disabled={loading}>
+            {loading ? <Spinner label="Recherche…" /> : 'Voir les disponibilités →'}
           </button>
         </div>
       )}
@@ -241,14 +252,11 @@ export function ReservationWizard() {
           {pets.map((pet, i) => (
             <fieldset key={i} className="border rounded-xl p-4 space-y-3 bg-slate-50">
               <legend className="text-sm font-medium px-1">Animal {i + 1}</legend>
+              <p className="text-xs text-slate-700">Espèce : Chat (verrouillé)</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={label}>Nom</label>
                   <input className={input} value={pet.name} onChange={(e) => setPet(i, { name: e.target.value })} />
-                </div>
-                <div>
-                  <label className={label}>Espèce</label>
-                  <input className={input} value={pet.species} onChange={(e) => setPet(i, { species: e.target.value })} />
                 </div>
                 <div>
                   <label className={label}>Sexe</label>
@@ -268,7 +276,7 @@ export function ReservationWizard() {
                   <label className={label}>Né(e) le (optionnel)</label>
                   <input type="date" className={input} value={pet.birthDate ?? ''} onChange={(e) => setPet(i, { birthDate: e.target.value || null })} />
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className={label}>N° I-CAD (optionnel maintenant)</label>
                   <input className={input} value={pet.identificationNumber ?? ''} onChange={(e) => setPet(i, { identificationNumber: e.target.value || null })} />
                 </div>
@@ -280,8 +288,8 @@ export function ReservationWizard() {
             <span>J’accepte que mes coordonnées et celles de mes animaux soient utilisées pour traiter cette réservation.</span>
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <button className={btn} onClick={submit} disabled={pets.some((p) => !p.name)}>
-            Envoyer la demande
+          <button className={btn} onClick={submit} disabled={pets.some((p) => !p.name) || loading}>
+            {loading ? <Spinner label="Envoi…" /> : 'Envoyer la demande'}
           </button>
         </div>
       )}
@@ -293,6 +301,15 @@ function nightsBetween(start: string, end: string): number {
   const s = new Date(`${start}T00:00:00Z`).getTime();
   const e = new Date(`${end}T00:00:00Z`).getTime();
   return Math.max(0, Math.round((e - s) / 86_400_000));
+}
+
+function Spinner({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+      {label}
+    </span>
+  );
 }
 
 function OptionCard({

@@ -127,11 +127,12 @@ export default async function OffresPage() {
                 return (
                   <div key={booking.id} className="border-b pb-3 space-y-2">
                     <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium">
-                          {pets || 'Animal'} — {booking.client?.firstName} {booking.client?.lastName}
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {booking.client?.firstName} {booking.client?.lastName}
                         </p>
-                        <p className="text-xs text-slate-800">
+                        <p className="text-sm text-slate-800">{pets || 'Animal'}</p>
+                        <p className="text-xs text-slate-700">
                           {booking.checkInDate.toISOString().slice(0, 10)} →{' '}
                           {booking.checkOutDate.toISOString().slice(0, 10)} · Total{' '}
                           {formatCents(booking.totalPrice)} · Acompte{' '}

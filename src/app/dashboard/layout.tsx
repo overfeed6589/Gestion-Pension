@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentProfile } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/server';
+import { logout } from '@/app/login/action';
 
 // ---------------------------------------------------------------------------
 // Shell du dashboard (Phase G — Lot 3)
@@ -47,8 +48,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </Link>
           ))}
         </nav>
-        <div className="px-4 py-4 border-t border-slate-800 text-xs text-slate-400">
-          {profile?.fullName ?? user.email}
+        <div className="px-4 py-4 border-t border-slate-800 text-xs text-slate-400 space-y-2">
+          <p>{profile?.fullName ?? user.email}</p>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="text-slate-300 hover:text-white underline underline-offset-2"
+            >
+              Se déconnecter
+            </button>
+          </form>
         </div>
       </aside>
       <main className="pl-60 min-h-screen">
