@@ -21,6 +21,8 @@ diffusé par abonnement à d'autres pensions.
 | Plan technique (sécurité, itération 1) | `PLAN.md` |
 | Roadmap produit | `docs/ROADMAP.md` |
 | Déploiement Vercel/Stripe + smoke test | `docs/deploiement-vercel.md` |
+| Test live de toutes les fonctionnalités | `docs/test-live-fonctionnalites.md` |
+| Parcours client & emails (matrice) | `docs/parcours-client-emails.md` |
 | Durcissement Supabase (checklist) | `docs/securite-supabase.md` |
 
 ## Démarrage local

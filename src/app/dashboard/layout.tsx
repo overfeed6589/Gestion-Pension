@@ -18,6 +18,7 @@ const NAV_LINKS = [
   { href: '/dashboard/fiches', label: 'Fiches techniques' },
   { href: '/dashboard/clients', label: 'Clients' },
   { href: '/dashboard/housing', label: 'Logements & box' },
+  { href: '/dashboard/rapports', label: 'Rapports' },
   { href: '/dashboard/parametres', label: 'Paramètres' },
 ];
 
