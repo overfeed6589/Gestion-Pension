@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { createClient } from '@/utils/supabase/server';
 import { login } from './action';
 
 type PageProps = {
@@ -5,6 +7,11 @@ type PageProps = {
 };
 
 export default async function LoginPage({ searchParams }: PageProps) {
+  // Si déjà connecté, on redirige directement vers le dashboard.
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) redirect('/dashboard');
+
   // Gestion asynchrone des searchParams (Next.js 15)
   const params = await searchParams;
   const errorMessage = params.error;

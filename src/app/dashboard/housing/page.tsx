@@ -22,7 +22,7 @@ export default async function HousingManagementPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Parc de logements & box</h1>
-        <p className="text-slate-500">
+        <p className="text-slate-700">
           Définissez vos espaces (catégorie, capacité, tarifs), puis ajoutez les box physiques.
           L’occupation affichée est dérivée des réservations du jour.
         </p>
@@ -35,7 +35,7 @@ export default async function HousingManagementPage() {
 
         <div className="lg:col-span-3 space-y-6">
           {categories.length === 0 ? (
-            <p className="text-sm text-slate-500 italic bg-white border rounded-xl p-6">
+            <p className="text-sm text-slate-700 italic bg-white border rounded-xl p-6">
               Aucun espace configuré pour l’instant.
             </p>
           ) : (
@@ -51,7 +51,7 @@ export default async function HousingManagementPage() {
                         </span>
                       )}
                     </h2>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-700">
                       Capacité {category.capacity} • {formatCents(category.basePricePerNight)}/nuit
                       {category.surchargePerAnimal > 0
                         ? ` • +${formatCents(category.surchargePerAnimal)}/animal supplémentaire`
@@ -63,14 +63,14 @@ export default async function HousingManagementPage() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                   {category.units.length === 0 && (
-                    <p className="text-xs text-slate-500 italic col-span-full">
+                    <p className="text-xs text-slate-700 italic col-span-full">
                       Aucun box : ajoutez-en pour pouvoir attribuer les séjours.
                     </p>
                   )}
                   {category.units.map((unit) => {
                     const horsService = !unit.isAvailable;
                     const occupied = !horsService && occupiedIds.has(unit.id);
-                    const badge = horsService ? 'bg-red-50 text-red-700 border-red-200' : occupied ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    const badge = horsService ? 'bg-red-50 text-red-700 border-red-200' : occupied ? 'bg-slate-100 text-slate-800' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
                     const label = horsService ? 'Hors service' : occupied ? 'Occupé aujourd’hui' : 'Libre';
                     return (
                       <div

@@ -41,9 +41,9 @@ export default async function DashboardHomePage() {
 
   const card = (label: string, value: string | number, hint?: string) => (
     <div className="bg-white border rounded-xl p-5 shadow-sm">
-      <p className="text-xs text-slate-500 uppercase tracking-wide">{label}</p>
+      <p className="text-xs text-slate-700 uppercase tracking-wide">{label}</p>
       <p className="text-2xl font-bold mt-1">{value}</p>
-      {hint && <p className="text-xs text-slate-600 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-slate-800 mt-1">{hint}</p>}
     </div>
   );
 
@@ -51,7 +51,7 @@ export default async function DashboardHomePage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Vue d’ensemble</h1>
-        <p className="text-slate-500">
+        <p className="text-slate-700">
           Bienvenue{profile?.fullName ? `, ${profile.fullName}` : ''}. Activité du {new Date().toLocaleDateString('fr-FR')}.
         </p>
       </div>
@@ -67,8 +67,8 @@ export default async function DashboardHomePage() {
         {card('Arrivées aujourd’hui', statusCounts[0]?.arrivalsToday ?? 0)}
         {card('Départs aujourd’hui', statusCounts[0]?.departuresToday ?? 0)}
         <div className="bg-white border rounded-xl p-5 flex items-center justify-between">
-          <p className="text-xs text-slate-500 uppercase tracking-wide">Se connecter pour les détails</p>
-          <p className="text-xs text-slate-500">{user.email}</p>
+          <p className="text-xs text-slate-700 uppercase tracking-wide">Se connecter pour les détails</p>
+          <p className="text-xs text-slate-700">{user.email}</p>
         </div>
       </div>
 
@@ -99,11 +99,11 @@ export default async function DashboardHomePage() {
           <h2 className="font-semibold">Finances (owner)</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <p className="text-xs text-slate-500">CA prévisionnel (séjours confirmés/en cours)</p>
+              <p className="text-xs text-slate-700">CA prévisionnel (séjours confirmés/en cours)</p>
               <p className="text-xl font-bold text-emerald-700">{formatCents(financials[0]?.forecast ?? 0)}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-500">Encaissé (acomptes et règlements reçus)</p>
+              <p className="text-xs text-slate-700">Encaissé (acomptes et règlements reçus)</p>
               <p className="text-xl font-bold text-emerald-700">{formatCents(financials[0]?.collected ?? 0)}</p>
             </div>
           </div>

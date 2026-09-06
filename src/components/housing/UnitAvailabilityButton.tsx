@@ -26,7 +26,7 @@ export function UnitAvailabilityButton({ unitId }: { unitId: string }) {
         type="button"
         disabled={busy}
         onClick={handleClick}
-        className="underline text-slate-500 hover:text-slate-800 disabled:opacity-50"
+        className="underline text-slate-700 hover:text-slate-800 disabled:opacity-50"
       >
         {busy ? '…' : 'Hors service / réactiver'}
       </button>

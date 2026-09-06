@@ -14,7 +14,7 @@ export default async function ParametresPage() {
     <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Paramètres de la pension</h1>
-        <p className="text-slate-500">
+        <p className="text-slate-700">
           Identité légale affichée sur le site public et règles commerciales (acompte, annulation,
           validité des offres) utilisées par les relances.
         </p>

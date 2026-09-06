@@ -107,7 +107,7 @@ export function OfferForm({ clients, categories, existing }: OfferFormProps) {
         <h2 className="font-semibold text-lg">
           {existing ? 'Créer l’offre (depuis la demande web)' : 'Nouvelle offre de séjour'}
         </h2>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-700">
           Les espaces sont bloqués dès la création. L’acompte (défaut 30 %) confirme la réservation.
         </p>
       </div>
@@ -115,7 +115,7 @@ export function OfferForm({ clients, categories, existing }: OfferFormProps) {
       {/* Client */}
       {existing ? (
         <p className="text-sm">
-          <span className="text-slate-500">Client : </span>
+          <span className="text-slate-700">Client : </span>
           <span className="font-medium">
             {selectedClient?.firstName} {selectedClient?.lastName}
           </span>
@@ -190,7 +190,7 @@ export function OfferForm({ clients, categories, existing }: OfferFormProps) {
                 },
               ])
             }
-            className="text-xs text-slate-600 underline"
+            className="text-xs text-slate-800 underline"
           >
             + Ajouter un espace/période
           </button>

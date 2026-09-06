@@ -28,7 +28,7 @@ export function UnitForm({ categoryId }: { categoryId: string }) {
       >
         + Box
       </button>
-      {state.message && <span className="text-xs text-slate-500">{state.message}</span>}
+      {state.message && <span className="text-xs text-slate-700">{state.message}</span>}
     </form>
   );
 }

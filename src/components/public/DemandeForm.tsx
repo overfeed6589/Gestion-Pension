@@ -83,7 +83,7 @@ export function DemandeForm() {
       {/* Honeypot — doit rester vide */}
       <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
 
-      <label className="flex items-start gap-2 text-xs text-slate-600">
+      <label className="flex items-start gap-2 text-xs text-slate-800">
         <input name="consent" type="checkbox" className="mt-0.5" required />
         <span>
           J’accepte que mes coordonnées soient utilisées pour traiter ma demande de réservation

@@ -75,7 +75,7 @@ export default async function TachesPage({
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Tâches du jour</h1>
-          <p className="text-slate-500">
+          <p className="text-slate-700">
             Tours matin/soir : alimentation, soins et vigilance par espace.
           </p>
         </div>
@@ -93,7 +93,7 @@ export default async function TachesPage({
       </div>
 
       {grouped.size === 0 ? (
-        <p className="text-sm text-slate-500 italic bg-white border rounded-xl p-6">
+        <p className="text-sm text-slate-700 italic bg-white border rounded-xl p-6">
           Aucun animal présent à cette date.
         </p>
       ) : (
@@ -112,9 +112,9 @@ export default async function TachesPage({
                   <div key={row.petId} className="border rounded-lg p-3 space-y-1">
                     <p className="font-semibold text-sm">
                       {row.petName}{' '}
-                      <span className="text-xs font-normal text-slate-500">({row.species})</span>
+                      <span className="text-xs font-normal text-slate-700">({row.species})</span>
                     </p>
-                    <p className="text-xs text-slate-500">Propriétaire : {row.clientLabel}</p>
+                    <p className="text-xs text-slate-700">Propriétaire : {row.clientLabel}</p>
                     {row.dietNotes && (
                       <p className="text-xs">
                         <span className="font-medium text-amber-700">🍽 Alimentation :</span>{' '}

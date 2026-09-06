@@ -43,8 +43,8 @@ export default async function ClientsPage() {
                     <p className="font-semibold">
                       {client.firstName} {client.lastName}
                     </p>
-                    <p className="text-xs text-slate-500">{client.email} • {client.phone}</p>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-slate-700">{client.email} • {client.phone}</p>
+                    <p className="text-xs text-slate-700 mt-1">
                       Animaux : {client.pets.map((p) => p.name).join(', ') || '—'} •
                       Réservations : {client.bookings.length}
                     </p>

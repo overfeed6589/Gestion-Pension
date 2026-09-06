@@ -21,7 +21,7 @@ export function PetAddForm({ clientId }: { clientId: string }) {
         onClick={() => {
           setOpen((v) => !v);
         }}
-        className="text-xs text-slate-600 underline"
+        className="text-xs text-slate-800 underline"
       >
         {open ? 'Fermer' : '+ Ajouter un animal'}
       </button>

@@ -18,9 +18,7 @@ const STATUS_LABELS: Record<string, string> = {
   requested: 'Demande reçue',
 };
 
-export default async function OffresPage() {
-  await requireRole('secretary');
-
+async function loadOffresData() {
   const [clients, categories, latestBookings] = await Promise.all([
     db.query.clients.findMany({
       with: { pets: true },
@@ -45,7 +43,27 @@ export default async function OffresPage() {
       limit: 50,
     }),
   ]);
+  return { clients, categories, latestBookings };
+}
 
+export default async function OffresPage() {
+  await requireRole('secretary');
+
+  let data: Awaited<ReturnType<typeof loadOffresData>>;
+  try {
+    data = await loadOffresData();
+  } catch (error) {
+    // Panneau de diagnostic : retiré une fois la cause identifiée.
+    console.error('OffresPage :', error);
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-800 space-y-2">
+        <p className="font-semibold">Erreur au chargement de la page Offres.</p>
+        <p className="text-sm break-all">{(error as Error).message}</p>
+      </div>
+    );
+  }
+
+  const { clients, categories, latestBookings } = data;
   const activeBookings = latestBookings.filter((b) => b.status === 'offered');
   const webRequests = latestBookings.filter((b) => b.status === 'requested' && b.source === 'web');
 
@@ -53,7 +71,7 @@ export default async function OffresPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Offres & réservations</h1>
-        <p className="text-slate-500">
+        <p className="text-slate-700">
           Créez une offre (espaces bloqués), envoyez le lien d’acompte : le paiement confirme la
           réservation et émet la facture d’acompte.
         </p>
@@ -68,12 +86,12 @@ export default async function OffresPage() {
                 <p className="text-sm font-medium">
                   {booking.client?.firstName} {booking.client?.lastName}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-700">
                   Arrivée {booking.checkInDate.toISOString().slice(0, 10)} →{' '}
                   {booking.checkOutDate.toISOString().slice(0, 10)}
                 </p>
                 {booking.requestNotes && (
-                  <p className="text-xs text-slate-600 mt-0.5">{booking.requestNotes}</p>
+                  <p className="text-xs text-slate-700 mt-0.5">{booking.requestNotes}</p>
                 )}
               </div>
               <Link
@@ -105,7 +123,7 @@ export default async function OffresPage() {
                   <div key={booking.id} className="border-b pb-2 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-medium">{pets || 'Animal'}</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-700">
                         {booking.client?.firstName} {booking.client?.lastName} • Acompte{' '}
                         {formatCents(booking.depositAmount)} / total {formatCents(booking.totalPrice)}
                       </p>
@@ -120,7 +138,7 @@ export default async function OffresPage() {
           <div className="space-y-2">
             <h2 className="font-semibold">Séjours récents</h2>
             {latestBookings.length === 0 ? (
-              <p className="text-sm text-slate-500 italic bg-white border rounded-xl p-6">
+              <p className="text-sm text-slate-700 italic bg-white border rounded-xl p-6">
                 Aucune réservation pour l’instant.
               </p>
             ) : (
@@ -134,7 +152,7 @@ export default async function OffresPage() {
                   <div key={booking.id} className="bg-white border rounded-xl p-4 flex items-center justify-between gap-4">
                     <div>
                       <p className="font-medium text-sm">{pets || 'Animal'}</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-700">
                         {booking.client?.firstName} {booking.client?.lastName} •{' '}
                         {booking.checkInDate.toISOString().slice(0, 10)} →{' '}
                         {booking.checkOutDate.toISOString().slice(0, 10)} • Box : {unit}

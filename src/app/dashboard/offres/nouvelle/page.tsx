@@ -62,12 +62,12 @@ export default async function NouvelleOffrePage({
         <h1 className="text-2xl font-bold tracking-tight">
           {existing ? 'Répondre à la demande web' : 'Nouvelle offre'}
         </h1>
-        <p className="text-slate-500">
+        <p className="text-slate-700">
           {existing
             ? 'Sélectionnez les animaux du client, vérifiez les dates, choisissez les espaces : la demande devient une offre bloquante.'
             : 'Créez une réservation pour un client existant.'}
         </p>
-        <Link href="/dashboard/offres" className="text-xs text-slate-500 underline">
+        <Link href="/dashboard/offres" className="text-xs text-slate-700 underline">
           ← Retour aux offres & demandes
         </Link>
       </div>
