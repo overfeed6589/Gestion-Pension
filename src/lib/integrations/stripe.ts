@@ -64,6 +64,7 @@ export async function createDepositCheckoutSession(
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
+      payment_method_types: ['card'],
       client_reference_id: input.bookingId,
       customer_email: input.customerEmail ?? undefined,
       line_items: [
