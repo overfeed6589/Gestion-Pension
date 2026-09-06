@@ -4,6 +4,7 @@ import { ne } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth';
 import { OfferForm } from '@/components/offers/OfferForm';
 import { PaymentLinkButton } from '@/components/offers/PaymentLinkButton';
+import { DemandValidateActions } from '@/components/offers/DemandValidateActions';
 import { formatCents } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,7 @@ export default async function OffresPage() {
 
   const { clients, categories, latestBookings } = data;
   const activeBookings = latestBookings.filter((b) => b.status === 'offered');
+  const proposedBookings = latestBookings.filter((b) => b.status === 'proposed');
   const webRequests = latestBookings.filter((b) => b.status === 'requested' && b.source === 'web');
 
   return (
@@ -112,6 +114,37 @@ export default async function OffresPage() {
         </div>
 
         <div className="lg:col-span-3 space-y-4">
+          {proposedBookings.length > 0 && (
+            <div className="bg-white border rounded-xl p-4 space-y-3">
+              <h2 className="font-semibold">
+                Demandes en attente de validation ({proposedBookings.length})
+              </h2>
+              {proposedBookings.map((booking) => {
+                const pets = booking.segments
+                  .flatMap((s) => s.occupantLinks.map((ol) => ol.pet?.name))
+                  .filter(Boolean)
+                  .join(', ');
+                return (
+                  <div key={booking.id} className="border-b pb-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {pets || 'Animal'} — {booking.client?.firstName} {booking.client?.lastName}
+                        </p>
+                        <p className="text-xs text-slate-800">
+                          {booking.checkInDate.toISOString().slice(0, 10)} →{' '}
+                          {booking.checkOutDate.toISOString().slice(0, 10)} · Total{' '}
+                          {formatCents(booking.totalPrice)} · Acompte{' '}
+                          {formatCents(booking.depositAmount)}
+                        </p>
+                      </div>
+                    </div>
+                    <DemandValidateActions bookingId={booking.id} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {activeBookings.length > 0 && (
             <div className="bg-white border rounded-xl p-4 space-y-2">
               <h2 className="font-semibold">Offres en attente de paiement ({activeBookings.length})</h2>

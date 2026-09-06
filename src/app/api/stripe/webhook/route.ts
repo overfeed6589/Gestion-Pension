@@ -5,7 +5,7 @@ import { bookings, clients } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { serverEnv } from '@/lib/env';
 import { getStripe } from '@/lib/integrations/stripe';
-import { confirmDepositPayment } from '@/lib/payments';
+import { confirmOnlinePayment, type OnlinePaymentKind } from '@/lib/payments';
 import { sendMail, layoutHtml } from '@/lib/integrations/email';
 import { formatCents } from '@/lib/money';
 
@@ -13,9 +13,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Webhook Stripe (Phase G3) — confirmation des acomptes.
- * Seul `checkout.session.completed` (payment_status = 'paid') déclenche la
- * conversion offered → confirmed + facture d'acompte (idempotent côté DB).
+ * Webhook Stripe (G3/G9) — confirmation des paiements en ligne (acompte OU
+ * séjour complet/solde). `checkout.session.completed` (payment_status = 'paid')
+ * déclenche la confirmation ; le montant attendu est recalculé côté serveur.
  */
 export async function POST(request: Request) {
   const stripe = getStripe();
@@ -44,21 +44,23 @@ export async function POST(request: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
     if (session.payment_status === 'paid' && session.client_reference_id) {
       const bookingId = session.client_reference_id;
-      const result = await confirmDepositPayment({
+      const kind: OnlinePaymentKind =
+        session.metadata?.kind === 'payment' ? 'payment' : 'deposit';
+
+      const result = await confirmOnlinePayment({
         bookingId,
         amountCents: session.amount_total ?? 0,
+        kind,
         stripeSessionId: session.id,
         stripePaymentIntentId:
           typeof session.payment_intent === 'string' ? session.payment_intent : null,
       });
       if (!result.ok) {
-        // Erreur métier (ex: montant inattendu) : on répond 500 pour que Stripe
-        // rejoue l'événement et que l'on puisse corriger.
         console.error('webhook stripe :', result.message);
         return NextResponse.json({ error: result.message }, { status: 500 });
       }
 
-      // Email de confirmation au client (best effort : ne fait pas échouer le webhook).
+      // Email de confirmation au client (best effort).
       try {
         const [booking] = await db
           .select({
@@ -67,7 +69,6 @@ export async function POST(request: Request) {
             checkInDate: bookings.checkInDate,
             email: clients.email,
             firstName: clients.firstName,
-            lastName: clients.lastName,
           })
           .from(bookings)
           .innerJoin(clients, eq(bookings.clientId, clients.id))
@@ -75,18 +76,24 @@ export async function POST(request: Request) {
           .limit(1);
 
         if (booking?.email) {
-          const remaining = booking.totalPrice - booking.depositAmount;
+          const remaining = Math.max(0, booking.totalPrice - booking.depositAmount);
+          const isFull = result.fullyPaid;
           await sendMail({
             to: booking.email,
-            subject: 'Réservation confirmée — merci !',
+            subject: isFull ? 'Séjour payé — merci !' : 'Réservation confirmée — merci !',
             html: layoutHtml(
               `<h2>Bonjour ${booking.firstName},</h2>
-               <p>Votre acompte de <strong>${formatCents(booking.depositAmount)}</strong> a bien été reçu :
-               votre réservation du ${booking.checkInDate.toISOString().slice(0, 10)} est confirmée.</p>
                ${
-                 remaining > 0
-                   ? `<p>Solde restant dû au check-in : <strong>${formatCents(remaining)}</strong>.</p>`
-                   : ''
+                 isFull
+                   ? `<p>Votre séjour du ${booking.checkInDate.toISOString().slice(0, 10)} est intégralement réglé
+                       (<strong>${formatCents(booking.totalPrice)}</strong>). Merci !</p>`
+                   : `<p>Votre acompte de <strong>${formatCents(booking.depositAmount)}</strong> a bien été reçu :
+                       votre réservation du ${booking.checkInDate.toISOString().slice(0, 10)} est confirmée.</p>
+                       ${
+                         remaining > 0
+                           ? `<p>Solde restant : <strong>${formatCents(remaining)}</strong>.</p>`
+                           : ''
+                       }`
                }`
             ),
           });

@@ -5,8 +5,11 @@ import { db } from '@/db';
 import { bookings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { createBookingWithOffer, attachOfferToBooking, type CreateOfferInput, type AttachOfferInput } from '@/lib/booking-offers';
-import { createDepositCheckoutSession } from '@/lib/integrations/stripe';
+import { createDepositCheckoutSession, appBaseUrl } from '@/lib/integrations/stripe';
 import { cancelBooking } from '@/lib/payments';
+import { ensureClientAccessToken } from '@/lib/client-access';
+import { sendMail, layoutHtml } from '@/lib/integrations/email';
+import { getPensionSettings } from '@/lib/settings';
 import { ActionState } from '@/types/actions';
 import { requireRole } from '@/lib/auth';
 
@@ -137,4 +140,105 @@ export async function cancelBookingAction(bookingId: string, reason: string): Pr
   revalidatePath(`/dashboard/bookings/${bookingId}`);
 
   return { success: true, message: result.message };
+}
+
+/**
+ * Valide une demande `proposed` → `offered` et envoie l'email avec le lien de
+ * paiement (dossier client). Rôle secretary/owner.
+ */
+export async function validateProposedBookingAction(bookingId: string): Promise<ActionState> {
+  await requireRole('secretary');
+
+  try {
+    const booking = await db.query.bookings.findFirst({
+      where: { RAW: (t) => eq(t.id, bookingId) },
+      with: { client: true },
+    });
+    if (!booking) return { success: false, message: 'Réservation introuvable.' };
+    if (booking.status !== 'proposed') {
+      return { success: false, message: 'Seule une demande en attente peut être validée.' };
+    }
+    if (!booking.client) return { success: false, message: 'Client introuvable.' };
+
+    const token = await db.transaction(async (tx) => ensureClientAccessToken(tx, booking.clientId));
+
+    await db.update(bookings).set({ status: 'offered' }).where(eq(bookings.id, bookingId));
+
+    const settings = await getPensionSettings();
+    const link = `${appBaseUrl()}/espace/${token}`;
+    try {
+      await sendMail({
+        to: booking.client.email,
+        subject: 'Votre séjour est validé — paiement en ligne',
+        html: layoutHtml(
+          `<h2>Bonjour ${booking.client.firstName},</h2>
+           <p>Votre séjour du ${booking.checkInDate.toISOString().slice(0, 10)} au ${booking.checkOutDate
+            .toISOString()
+            .slice(0, 10)} est validé.</p>
+           <p><a href="${link}" style="display:inline-block;background:#065f46;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Accéder à mon dossier</a></p>
+           <p>Vous pourrez y régler l’acompte (ou le séjour complet) et préciser vos heures d’arrivée/départ.</p>`,
+          settings.pensionName
+        ),
+      });
+    } catch (error) {
+      console.error('validateProposedBookingAction — email :', error);
+    }
+
+    revalidatePath('/dashboard/offres');
+    return { success: true, message: 'Demande validée, email de paiement envoyé.' };
+  } catch (error) {
+    console.error('validateProposedBookingAction :', error);
+    return { success: false, message: 'Erreur lors de la validation.' };
+  }
+}
+
+/**
+ * Valide une demande SANS paiement (acompte non reçu mais réservation
+ * maintenue). `proposed`/`offered` → `confirmed` (unpaid) ; le lien de solde
+ * reste disponible. Rôle secretary/owner.
+ */
+export async function validateWithoutPaymentAction(bookingId: string): Promise<ActionState> {
+  await requireRole('secretary');
+
+  try {
+    const booking = await db.query.bookings.findFirst({
+      where: { RAW: (t) => eq(t.id, bookingId) },
+      with: { client: true },
+    });
+    if (!booking) return { success: false, message: 'Réservation introuvable.' };
+    if (!['proposed', 'offered'].includes(booking.status)) {
+      return { success: false, message: 'Statut non modifiable.' };
+    }
+    if (!booking.client) return { success: false, message: 'Client introuvable.' };
+
+    const token = await db.transaction(async (tx) => ensureClientAccessToken(tx, booking.clientId));
+    await db
+      .update(bookings)
+      .set({ status: 'confirmed', paymentStatus: 'unpaid' })
+      .where(eq(bookings.id, bookingId));
+
+    const settings = await getPensionSettings();
+    const link = `${appBaseUrl()}/espace/${token}`;
+    try {
+      await sendMail({
+        to: booking.client.email,
+        subject: 'Votre réservation est confirmée',
+        html: layoutHtml(
+          `<h2>Bonjour ${booking.client.firstName},</h2>
+           <p>Votre réservation du ${booking.checkInDate.toISOString().slice(0, 10)} est confirmée.
+           Aucun paiement en ligne n’est exigé.</p>
+           <p><a href="${link}">Voir mon dossier</a></p>`,
+          settings.pensionName
+        ),
+      });
+    } catch (error) {
+      console.error('validateWithoutPaymentAction — email :', error);
+    }
+
+    revalidatePath('/dashboard/offres');
+    return { success: true, message: 'Réservation confirmée (sans acompte).' };
+  } catch (error) {
+    console.error('validateWithoutPaymentAction :', error);
+    return { success: false, message: 'Erreur lors de la validation.' };
+  }
 }

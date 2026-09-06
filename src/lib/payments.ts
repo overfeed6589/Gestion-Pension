@@ -102,6 +102,161 @@ export async function confirmDepositPayment(input: {
   }
 }
 
+export type OnlinePaymentKind = 'deposit' | 'payment';
+
+export type OnlinePaymentResult =
+  | { ok: true; bookingId: string; fullyPaid: boolean }
+  | { ok: false; message: string };
+
+/** Somme des paiements réussis d'un booking. */
+async function paidSucceededSum(
+  conn: Tx,
+  bookingId: string
+): Promise<number> {
+  const rows = await conn
+    .select({ sum: sql<number>`coalesce(sum(${payments.amount}), 0)::int` })
+    .from(payments)
+    .where(sql`${payments.bookingId} = ${bookingId} AND ${payments.status} = 'succeeded'`);
+  return rows[0]?.sum ?? 0;
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Marque payée une facture (créée à l'instant si besoin). */
+async function payInvoice(
+  tx: Tx,
+  bookingId: string,
+  type: 'deposit' | 'final',
+  paidAt: Date
+): Promise<void> {
+  const inv = await generateBookingInvoice(tx, bookingId, type);
+  if (inv.ok) {
+    await tx
+      .update(invoices)
+      .set({ status: 'paid', paidAt })
+      .where(eq(invoices.id, inv.invoiceId));
+  }
+}
+
+/**
+ * Confirme un paiement en ligne (acompte OU paiement total/solde) reçu au
+ * webhook. Le montant attendu est RECALCULÉ côté serveur (montant périmé
+ * refusé/remboursé). Sécurisé : pas de double encaissement, factures cohérentes
+ * (acompte puis finale nette de l'acompte si total atteint).
+ */
+export async function confirmOnlinePayment(input: {
+  bookingId: string;
+  amountCents: number;
+  kind: OnlinePaymentKind;
+  stripeSessionId?: string | null;
+  stripePaymentIntentId?: string | null;
+}): Promise<OnlinePaymentResult> {
+  let refundIntent: string | null = null;
+  let alreadyHandled = false;
+
+  try {
+    const outcome = await db.transaction(async (tx) => {
+      const [booking] = await tx
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .for('update')
+        .limit(1);
+      if (!booking) throw new Error('Réservation introuvable.');
+      if (booking.status === 'cancelled' || booking.status === 'expired') {
+        throw new Error(`Réservation ${booking.status}.`);
+      }
+
+      // Idempotence (double webhook, même PaymentIntent déjà enregistré).
+      if (input.stripePaymentIntentId) {
+        const dup = await tx
+          .select({ id: payments.id })
+          .from(payments)
+          .where(eq(payments.stripePaymentIntentId, input.stripePaymentIntentId))
+          .limit(1);
+        if (dup[0]) {
+          alreadyHandled = true;
+          return { bookingId: booking.id, fullyPaid: false, refund: null as string | null };
+        }
+      }
+
+      const paidBefore = await paidSucceededSum(tx, booking.id);
+      const totalPrice = booking.totalPrice;
+
+      // Trop perçu (déjà soldé) → on rembourse ce paiement, on ne l'enregistre pas.
+      if (paidBefore >= totalPrice) {
+        refundIntent = input.stripePaymentIntentId ?? null;
+        return { bookingId: booking.id, fullyPaid: true, refund: refundIntent };
+      }
+
+      let expected: number;
+      if (input.kind === 'deposit') {
+        expected = paidBefore === 0 ? booking.depositAmount : -1;
+      } else {
+        expected = totalPrice - paidBefore;
+      }
+
+      if (input.amountCents !== expected) {
+        // Session périmée (montant déjà couvert/partiellement payé) → rembourser.
+        refundIntent = input.stripePaymentIntentId ?? null;
+        return { bookingId: booking.id, fullyPaid: paidBefore >= totalPrice, refund: refundIntent };
+      }
+
+      const paidAt = new Date();
+      await tx.insert(payments).values({
+        bookingId: booking.id,
+        amount: input.amountCents,
+        currency: 'EUR',
+        method: 'stripe',
+        stripePaymentIntentId: input.stripePaymentIntentId ?? null,
+        status: 'succeeded',
+        paidAt,
+      });
+
+      const paidAfter = paidBefore + input.amountCents;
+      const fullyPaid = paidAfter >= totalPrice;
+      const wasOffered = booking.status === 'offered';
+
+      await tx
+        .update(bookings)
+        .set({
+          status: wasOffered ? 'confirmed' : booking.status,
+          paymentStatus: fullyPaid ? 'fully_paid' : 'deposit_paid',
+          stripeCheckoutSessionId: input.stripeSessionId ?? booking.stripeCheckoutSessionId,
+          stripePaymentIntentId: input.stripePaymentIntentId ?? booking.stripePaymentIntentId,
+        })
+        .where(eq(bookings.id, booking.id));
+
+      // Factures : acompte (si > 0) puis finale nette quand tout est réglé.
+      if (booking.depositAmount > 0) await payInvoice(tx, booking.id, 'deposit', paidAt);
+      if (fullyPaid) await payInvoice(tx, booking.id, 'final', paidAt);
+
+      await logAudit(tx, {
+        action: wasOffered ? 'booking.confirmed' : 'booking.payment',
+        entityType: 'booking',
+        entityId: booking.id,
+        metadata: { amountCents: input.amountCents, kind: input.kind, method: 'stripe' },
+      });
+
+      return { bookingId: booking.id, fullyPaid, refund: null as string | null };
+    });
+
+    if (alreadyHandled) {
+      return { ok: true, bookingId: outcome.bookingId, fullyPaid: outcome.fullyPaid };
+    }
+    if (outcome.refund) {
+      // Session/montant périmé : rembourser ce que Stripe a encaissé.
+      const res = await refundPaymentIntent(outcome.refund, input.amountCents);
+      console.warn('confirmOnlinePayment : paiement refusé remboursé —', res.ok ? 'ok' : res.message);
+      return { ok: true, bookingId: outcome.bookingId, fullyPaid: outcome.fullyPaid };
+    }
+    return { ok: true, bookingId: outcome.bookingId, fullyPaid: outcome.fullyPaid };
+  } catch (error) {
+    console.error('confirmOnlinePayment :', error);
+    return { ok: false, message: 'Erreur lors de la confirmation du paiement.' };
+  }
+}
+
 export type CancelBookingResult =
   | { ok: true; refunded: boolean; message: string }
   | { ok: false; message: string };

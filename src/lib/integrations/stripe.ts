@@ -38,11 +38,16 @@ export type CreateCheckoutInput = {
   depositAmountCents: number;
   customerEmail?: string | null;
   description: string;
+  kind?: 'deposit' | 'payment';
+  /** Chemin de redirection après paiement (client → /espace/<token>). */
+  successPath?: string;
+  cancelPath?: string;
 };
 
 /**
- * Crée une session Checkout pour l'acompte. La référence du booking est portée
- * par `client_reference_id` + `metadata` (retrouvée au webhook).
+ * Crée une session Checkout (acompte OU paiement/solde). La référence du
+ * booking est portée par `client_reference_id` + `metadata` (retrouvée au
+ * webhook) avec le `kind` pour recalculer le montant attendu.
  */
 export async function createDepositCheckoutSession(
   input: CreateCheckoutInput
@@ -51,6 +56,10 @@ export async function createDepositCheckoutSession(
   if (!stripe) {
     return { ok: false, message: 'Stripe non configuré (STRIPE_SECRET_KEY absente).' };
   }
+  const kind = input.kind ?? 'deposit';
+  const base = appBaseUrl();
+  const successPath = input.successPath ?? `/dashboard/offres?paiement=succes&reservation=${input.bookingId}`;
+  const cancelPath = input.cancelPath ?? `/dashboard/offres?paiement=annule&reservation=${input.bookingId}`;
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -64,15 +73,15 @@ export async function createDepositCheckoutSession(
             currency: 'eur',
             unit_amount: input.depositAmountCents,
             product_data: {
-              name: 'Acompte de réservation',
+              name: kind === 'deposit' ? 'Acompte de réservation' : 'Paiement du séjour',
               description: input.description.slice(0, 400),
             },
           },
         },
       ],
-      metadata: { bookingId: input.bookingId, type: 'deposit' },
-      success_url: `${appBaseUrl()}/dashboard/offres?paiement=succes&reservation=${input.bookingId}`,
-      cancel_url: `${appBaseUrl()}/dashboard/offres?paiement=annule&reservation=${input.bookingId}`,
+      metadata: { bookingId: input.bookingId, kind },
+      success_url: `${base}${successPath}`,
+      cancel_url: `${base}${cancelPath}`,
     });
 
     if (!session.url) {
