@@ -8,7 +8,8 @@ import { createBookingWithOffer, attachOfferToBooking, rebuildBookingOffer, type
 import { createDepositCheckoutSession, appBaseUrl } from '@/lib/integrations/stripe';
 import { cancelBooking } from '@/lib/payments';
 import { ensureClientAccessToken } from '@/lib/client-access';
-import { sendMail, layoutHtml } from '@/lib/integrations/email';
+import { sendBookingEmailOnce } from '@/lib/outbound-emails';
+import { layoutHtml } from '@/lib/integrations/email';
 import { getPensionSettings } from '@/lib/settings';
 import { inviteMissingPetInfo, requestTimeSlots } from '@/lib/booking-emails';
 import { ActionState } from '@/types/actions';
@@ -168,7 +169,9 @@ export async function validateProposedBookingAction(bookingId: string): Promise<
     const settings = await getPensionSettings();
     const link = `${appBaseUrl()}/espace/${token}`;
     try {
-      await sendMail({
+      await sendBookingEmailOnce({
+        bookingId,
+        kind: 'liens_paiement',
         to: booking.client.email,
         subject: 'Votre séjour est validé — paiement en ligne',
         html: layoutHtml(
@@ -228,7 +231,9 @@ export async function validateWithoutPaymentAction(bookingId: string): Promise<A
     const settings = await getPensionSettings();
     const link = `${appBaseUrl()}/espace/${token}`;
     try {
-      await sendMail({
+      await sendBookingEmailOnce({
+        bookingId,
+        kind: 'validation_sans_acompte',
         to: booking.client.email,
         subject: 'Votre réservation est confirmée',
         html: layoutHtml(

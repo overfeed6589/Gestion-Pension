@@ -7,7 +7,8 @@ import { createBookingSegmentTx } from '@/lib/scheduling/allocation';
 import { computeDepositAmount } from '@/lib/pricing';
 import { getPensionSettings } from '@/lib/settings';
 import { ensureClientAccessToken } from '@/lib/client-access';
-import { sendMail, layoutHtml } from '@/lib/integrations/email';
+import { sendBookingEmailOnce } from '@/lib/outbound-emails';
+import { layoutHtml } from '@/lib/integrations/email';
 import { appBaseUrl } from '@/lib/integrations/stripe';
 import { toDateString } from '@/lib/scheduling/checker';
 
@@ -229,11 +230,13 @@ export async function createPublicProposal(
       return { bookingId, token };
     });
 
-    // 6. Email E1 (best effort).
+    // 6. Email E1 (best effort, dédupliqué).
     const settings = await getPensionSettings();
     const link = `${appBaseUrl()}/espace/${token}`;
     try {
-      await sendMail({
+      await sendBookingEmailOnce({
+        bookingId,
+        kind: 'confirmation_demande',
         to: email,
         subject: 'Demande de réservation bien reçue',
         html: layoutHtml(

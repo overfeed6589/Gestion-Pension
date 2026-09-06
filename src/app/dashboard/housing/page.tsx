@@ -2,7 +2,9 @@ import { db } from '@/db';
 import { requireRole } from '@/lib/auth';
 import { getUnitOccupancyForDate } from '@/lib/scheduling/occupancy';
 import { CategoryForm } from '@/components/housing/CategoryForm';
+import { CategoryEdit } from '@/components/housing/CategoryEdit';
 import { UnitForm } from '@/components/housing/UnitForm';
+import { UnitManage } from '@/components/housing/UnitManage';
 import { UnitAvailabilityButton } from '@/components/housing/UnitAvailabilityButton';
 import { formatCents } from '@/lib/money';
 
@@ -61,6 +63,17 @@ export default async function HousingManagementPage() {
                   <UnitForm categoryId={category.id} />
                 </div>
 
+                <CategoryEdit
+                  categoryId={category.id}
+                  name={category.name}
+                  description={category.description}
+                  publicName={category.publicName}
+                  capacity={category.capacity}
+                  basePrice={category.basePricePerNight / 100}
+                  surcharge={category.surchargePerAnimal / 100}
+                  isPublic={category.isPublic}
+                />
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                   {category.units.length === 0 && (
                     <p className="text-xs text-slate-700 italic col-span-full">
@@ -81,6 +94,7 @@ export default async function HousingManagementPage() {
                           <span className="font-bold text-sm">{unit.name}</span>
                           <span className="text-[11px] font-semibold">{label}</span>
                         </div>
+                        <UnitManage unitId={unit.id} name={unit.name} />
                         <UnitAvailabilityButton unitId={unit.id} />
                       </div>
                     );
