@@ -36,6 +36,10 @@ export type CreateOfferInput = {
   checkOutDate: string;
   segments: OfferSegmentInput[];
   source?: BookingSource;
+  /** Statut du booking créé : 'offered' (défaut) ou 'proposed' (hold G9). */
+  status?: 'offered' | 'proposed';
+  requestNotes?: string | null;
+  rgpdConsentAt?: Date | null;
 };
 
 export type AttachOfferInput = {
@@ -105,7 +109,7 @@ async function createOfferInTx(
     .insert(bookings)
     .values({
       clientId: input.clientId,
-      status: 'offered',
+      status: input.status ?? 'offered',
       source: input.source ?? 'phone',
       totalPrice: plan.totalPrice,
       depositAmount,
@@ -113,6 +117,8 @@ async function createOfferInTx(
       checkInDate: new Date(`${startStr}T00:00:00Z`),
       checkOutDate: new Date(`${endStr}T00:00:00Z`),
       offeredExpiresAt,
+      requestNotes: input.requestNotes ?? null,
+      rgpdConsentAt: input.rgpdConsentAt ?? null,
     })
     .returning({ id: bookings.id });
 

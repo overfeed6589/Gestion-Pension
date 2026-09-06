@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { computeRequiredSpaces, buildSplitPlan, nightsRange, addDays } from '@/lib/split-plan';
+import {
+  computeRequiredSpaces,
+  partitionPetCount,
+  computeGroupNightPrice,
+  buildSplitPlan,
+  buildSegmentsForGroup,
+  nightsRange,
+  addDays,
+} from '@/lib/split-plan';
 
 describe('computeRequiredSpaces', () => {
   it('calcule le nombre d’espaces parallèles nécessaires', () => {
@@ -8,6 +16,53 @@ describe('computeRequiredSpaces', () => {
     expect(computeRequiredSpaces(4, 3)).toBe(2);
     expect(computeRequiredSpaces(6, 3)).toBe(2);
     expect(computeRequiredSpaces(7, 3)).toBe(3);
+  });
+});
+
+describe('partitionPetCount', () => {
+  it('répartit équitablement les animaux entre les espaces', () => {
+    expect(partitionPetCount(4, 2)).toEqual([2, 2]);
+    expect(partitionPetCount(5, 2)).toEqual([3, 2]);
+    expect(partitionPetCount(7, 3)).toEqual([3, 2, 2]);
+    expect(partitionPetCount(2, 3)).toEqual([1, 1]); // pas plus d’espaces que d’animaux
+  });
+});
+
+describe('computeGroupNightPrice', () => {
+  it('1 espace : base + supplément des animaux au-delà du 1er', () => {
+    // 2 chats, capacité 3, base 2000, supplément 600 → 2000 + 600 = 2600.
+    expect(computeGroupNightPrice(2, 3, 2000, 600)).toBe(2600);
+  });
+  it('groupe > capacité : prix de plusieurs espaces parallèles', () => {
+    // 4 chats, cap 3 → 2 espaces [2,2] → 2×(2000+600).
+    expect(computeGroupNightPrice(4, 3, 2000, 600)).toBe(2 * 2600);
+  });
+});
+
+describe('buildSegmentsForGroup', () => {
+  it('groupe > capacité : découpe en espaces parallèles disjoints', () => {
+    const segs = buildSegmentsForGroup({
+      petIds: ['p1', 'p2', 'p3', 'p4'],
+      portions: [{ categoryId: 'suite', startDate: '2026-07-01', endDate: '2026-07-04', capacity: 3 }],
+    });
+    expect(segs).toHaveLength(2);
+    expect(segs[0].petIds).toEqual(['p1', 'p2']);
+    expect(segs[1].petIds).toEqual(['p3', 'p4']);
+  });
+
+  it('couverture d’un split séquentiel (suite 11 j + box 2 j)', () => {
+    const petIds = ['p1', 'p2'];
+    const segs = buildSegmentsForGroup({
+      petIds,
+      portions: [
+        { categoryId: 'suite', startDate: '2026-07-01', endDate: '2026-07-12', capacity: 3 },
+        { categoryId: 'box', startDate: '2026-07-12', endDate: '2026-07-14', capacity: 1 },
+      ],
+    });
+    // suite : 1 segment (2 chats ≤ 3) ; box capacité 1 → 2 espaces [1,1].
+    expect(segs).toHaveLength(3);
+    expect(segs[1].petIds.length).toBe(1);
+    expect(segs[2].petIds.length).toBe(1);
   });
 });
 

@@ -3,7 +3,6 @@ import { db } from '@/db';
 import { housingCategories } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getPensionSettings } from '@/lib/settings';
-import { DemandeForm } from '@/components/public/DemandeForm';
 import { formatCents } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
@@ -61,8 +60,20 @@ export default async function HomePage() {
           )}
         </section>
 
-        <section>
-          <DemandeForm />
+        <section className="space-y-4">
+          <div className="bg-white border rounded-2xl p-6 shadow-sm space-y-4">
+            <h2 className="font-semibold text-xl">Demander une réservation</h2>
+            <p className="text-slate-700 text-sm">
+              En quelques étapes : vos dates, les espaces disponibles selon vos chats, puis les
+              informations de vos animaux. Sans engagement — nous confirmons par email sous 24/48 h.
+            </p>
+            <Link
+              href="/reserver"
+              className="inline-block bg-slate-900 text-white rounded-lg px-6 py-3 text-sm font-semibold hover:bg-slate-800"
+            >
+              Réserver en ligne →
+            </Link>
+          </div>
         </section>
       </main>
 

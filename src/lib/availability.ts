@@ -4,6 +4,7 @@ import { isUnitAvailableForPeriod } from '@/lib/scheduling/checker';
 import {
   buildSplitPlan,
   computeRequiredSpaces,
+  computeGroupNightPrice,
   addDays,
   type SplitPlanResult,
 } from '@/lib/split-plan';
@@ -25,7 +26,11 @@ export type PublicCategoryOption = {
   publicName: string | null;
   publicDescription: string | null;
   capacity: number;
+  basePricePerNight: number;
+  surchargePerAnimal: number;
   requiredSpaces: number;
+  /** Prix TTC par nuit pour TOUT le groupe dans cette catégorie. */
+  perNightPriceCents: number;
   /** La catégorie peut héberger le groupe sur TOUTE la durée demandée. */
   freeFullRange: boolean;
 };
@@ -86,7 +91,15 @@ export async function getPublicAvailability(input: {
       publicName: cat.publicName,
       publicDescription: cat.publicDescription,
       capacity: cat.capacity,
+      basePricePerNight: cat.basePricePerNight,
+      surchargePerAnimal: cat.surchargePerAnimal,
       requiredSpaces,
+      perNightPriceCents: computeGroupNightPrice(
+        input.petCount,
+        cat.capacity,
+        cat.basePricePerNight,
+        cat.surchargePerAnimal
+      ),
       freeFullRange: free >= requiredSpaces,
     });
   }

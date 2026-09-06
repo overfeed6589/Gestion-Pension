@@ -21,6 +21,45 @@ export function computeRequiredSpaces(petCount: number, capacity: number): numbe
   return Math.ceil(petCount / capacity);
 }
 
+/** Répartit `petCount` animaux sur `spaces` espaces (le plus équilibré). */
+export function partitionPetCount(petCount: number, spaces: number): number[] {
+  if (petCount < 1 || spaces < 1) return [];
+  const count = Math.min(spaces, petCount);
+  const base = Math.floor(petCount / count);
+  const remainder = petCount % count;
+  const sizes = new Array<number>(count).fill(base);
+  for (let i = 0; i < remainder; i += 1) sizes[i] += 1;
+  return sizes;
+}
+
+import { computeSegmentPrice } from '@/lib/pricing';
+
+/**
+ * Prix par nuit TTC du GROUPE (tous animaux) logé dans une catégorie donnée :
+ * `spaces` espaces parallèles au besoin (capacité dépassée), supplément par
+ * animal au-delà du 1er par espace.
+ */
+export function computeGroupNightPrice(
+  petCount: number,
+  capacity: number,
+  basePricePerNight: number,
+  surchargePerAnimal: number
+): number {
+  const spaces = computeRequiredSpaces(petCount, capacity);
+  const sizes = partitionPetCount(petCount, spaces);
+  return sizes.reduce(
+    (sum, size) =>
+      sum +
+      computeSegmentPrice({
+        nights: 1,
+        basePricePerNight,
+        surchargePerAnimal,
+        petCount: size,
+      }),
+    0
+  );
+}
+
 const MS_DAY = 86_400_000;
 
 function toUtc(date: Date): Date {
@@ -47,6 +86,37 @@ export type SplitSegment = {
   startDate: string; // 'YYYY-MM-DD'
   endDate: string; // 'YYYY-MM-DD' (fin exclusive)
 };
+
+/** Segment « prêt à insérer », structuré comme un OfferSegmentInput. */
+export type GroupSegment = SplitSegment & { petIds: string[] };
+
+/**
+ * Étend une couverture (une catégorie complète OU un plan de split séquentiel)
+ * en segments réels, en répartissant les animaux sur plusieurs espaces
+ * PARALLÈLES quand le groupe dépasse la capacité d'un box (⌈chats/capacité⌉).
+ * Chaque animal apparaît sur chaque nuit exactement une fois.
+ */
+export function buildSegmentsForGroup(params: {
+  petIds: string[];
+  portions: { categoryId: string; startDate: string; endDate: string; capacity: number }[];
+}): GroupSegment[] {
+  const out: GroupSegment[] = [];
+  for (const portion of params.portions) {
+    const spaces = computeRequiredSpaces(params.petIds.length, portion.capacity);
+    const sizes = partitionPetCount(params.petIds.length, spaces);
+    let pointer = 0;
+    for (const size of sizes) {
+      out.push({
+        categoryId: portion.categoryId,
+        startDate: portion.startDate,
+        endDate: portion.endDate,
+        petIds: params.petIds.slice(pointer, pointer + size),
+      });
+      pointer += size;
+    }
+  }
+  return out;
+}
 
 export type SplitPlanResult =
   | { ok: true; segments: SplitSegment[] }
