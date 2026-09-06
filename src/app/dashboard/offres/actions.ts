@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { bookings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { createBookingWithOffer, attachOfferToBooking, type CreateOfferInput, type AttachOfferInput } from '@/lib/booking-offers';
+import { createBookingWithOffer, attachOfferToBooking, rebuildBookingOffer, type CreateOfferInput, type AttachOfferInput, type RebuildOfferInput } from '@/lib/booking-offers';
 import { createDepositCheckoutSession, appBaseUrl } from '@/lib/integrations/stripe';
 import { cancelBooking } from '@/lib/payments';
 import { ensureClientAccessToken } from '@/lib/client-access';
@@ -257,4 +257,23 @@ export async function validateWithoutPaymentAction(bookingId: string): Promise<A
     console.error('validateWithoutPaymentAction :', error);
     return { success: false, message: 'Erreur lors de la validation.' };
   }
+}
+
+/**
+ * Ajuste une réservation non payée (mini-éditeur) — secretary/owner.
+ */
+export async function adjustOfferAction(input: RebuildOfferInput): Promise<ActionState> {
+  await requireRole('secretary');
+
+  const result = await rebuildBookingOffer(input);
+  if (!result.ok) return { success: false, message: result.message };
+
+  revalidatePath('/dashboard/offres');
+  revalidatePath(`/dashboard/offres/ajuster/${input.bookingId}`);
+
+  return {
+    success: true,
+    message: 'Réservation ajustée (segments recalculés).',
+    data: { totalPrice: result.totalPrice, depositAmount: result.depositAmount },
+  };
 }

@@ -139,7 +139,15 @@ export default async function OffresPage() {
                         </p>
                       </div>
                     </div>
-                    <DemandValidateActions bookingId={booking.id} />
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Link
+                        href={`/dashboard/offres/ajuster/${booking.id}`}
+                        className="text-xs underline text-slate-700"
+                      >
+                        Ajuster
+                      </Link>
+                      <DemandValidateActions bookingId={booking.id} />
+                    </div>
                   </div>
                 );
               })}
