@@ -7,6 +7,7 @@ import { sendMail, layoutHtml } from '@/lib/integrations/email';
 import { createDepositCheckoutSession } from '@/lib/integrations/stripe';
 import { formatCents } from '@/lib/money';
 import { serverEnv } from '@/lib/env';
+import { remindMissingTimeSlots, sendCompletionInvites } from '@/lib/booking-emails';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -133,6 +134,16 @@ export async function POST(request: Request) {
       ),
     });
     report.push(sent.ok ? `solde-rappel ${booking.id}` : `echec-mail ${booking.id}`);
+  }
+
+  // E7 : relances des heures d'arrivée/départ manquantes (J-15/7/1) + E5 cron.
+  try {
+    const slotsReport = await remindMissingTimeSlots();
+    report.push(...slotsReport.map((r) => `creneaux ${r}`));
+    const invites = await sendCompletionInvites();
+    report.push(...invites);
+  } catch (error) {
+    console.error('cron daily — relances heures :', error);
   }
 
   return NextResponse.json({ received: true, report });

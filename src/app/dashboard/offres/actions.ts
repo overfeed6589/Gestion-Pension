@@ -10,6 +10,7 @@ import { cancelBooking } from '@/lib/payments';
 import { ensureClientAccessToken } from '@/lib/client-access';
 import { sendMail, layoutHtml } from '@/lib/integrations/email';
 import { getPensionSettings } from '@/lib/settings';
+import { inviteMissingPetInfo, requestTimeSlots } from '@/lib/booking-emails';
 import { ActionState } from '@/types/actions';
 import { requireRole } from '@/lib/auth';
 
@@ -184,6 +185,13 @@ export async function validateProposedBookingAction(bookingId: string): Promise<
       console.error('validateProposedBookingAction — email :', error);
     }
 
+    // E5 : invite à compléter les fiches animales incomplètes (best effort).
+    try {
+      await inviteMissingPetInfo(bookingId);
+    } catch (error) {
+      console.error('validateProposedBookingAction — E5 :', error);
+    }
+
     revalidatePath('/dashboard/offres');
     return { success: true, message: 'Demande validée, email de paiement envoyé.' };
   } catch (error) {
@@ -233,6 +241,14 @@ export async function validateWithoutPaymentAction(bookingId: string): Promise<A
       });
     } catch (error) {
       console.error('validateWithoutPaymentAction — email :', error);
+    }
+
+    // E5/E6 compléments (best effort).
+    try {
+      await inviteMissingPetInfo(bookingId);
+      await requestTimeSlots(bookingId);
+    } catch (error) {
+      console.error('validateWithoutPaymentAction — E5/E6 :', error);
     }
 
     revalidatePath('/dashboard/offres');

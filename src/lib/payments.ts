@@ -6,6 +6,7 @@ import { refundPaymentIntent } from '@/lib/integrations/stripe';
 import { getPensionSettings } from '@/lib/settings';
 import { logAudit } from '@/lib/audit';
 import { shouldRefundDeposit } from '@/lib/refund-policy';
+import { requestTimeSlots } from '@/lib/booking-emails';
 
 // ---------------------------------------------------------------------------
 // Cycle de vie financier d'un séjour (Phase G3/G4)
@@ -250,6 +251,16 @@ export async function confirmOnlinePayment(input: {
       console.warn('confirmOnlinePayment : paiement refusé remboursé —', res.ok ? 'ok' : res.message);
       return { ok: true, bookingId: outcome.bookingId, fullyPaid: outcome.fullyPaid };
     }
+
+    // E6 : demande des heures d'arrivée/départ dès la confirmation (best effort).
+    if (!outcome.fullyPaid) {
+      try {
+        await requestTimeSlots(input.bookingId);
+      } catch (error) {
+        console.error('confirmOnlinePayment — E6 :', error);
+      }
+    }
+
     return { ok: true, bookingId: outcome.bookingId, fullyPaid: outcome.fullyPaid };
   } catch (error) {
     console.error('confirmOnlinePayment :', error);
