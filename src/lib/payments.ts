@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { bookings, payments, invoices, auditLogs } from '@/db/schema';
+import { bookings, bookingSegments, payments, invoices } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { generateBookingInvoice } from '@/lib/invoicing/generate';
 import { refundPaymentIntent } from '@/lib/integrations/stripe';
@@ -11,97 +11,11 @@ import { requestTimeSlots } from '@/lib/booking-emails';
 // ---------------------------------------------------------------------------
 // Cycle de vie financier d'un séjour (Phase G3/G4)
 // ---------------------------------------------------------------------------
-//  - confirmDepositPayment : appelé au webhook Stripe quand l'acompte est payé.
-//    Convertit le booking `offered → confirmed`, enregistre le paiement et émet
-//    la FACTURE D'ACOMPTE (trace de remboursement). Idempotent (double webhook).
 //  - cancelBooking : annulation + remboursement de l'acompte si l'annulation
 //    intervient ≥ N jours avant l'arrivée (settings.cancellationRefundDays).
 //  - expireOfferedBooking : offre non payée dans le délai → `expired`
 //    (libère les unités sans pénalité — aucun acompte n'a été encaissé).
 // ---------------------------------------------------------------------------
-
-export type DepositPaymentResult = { ok: true; bookingId: string } | { ok: false; message: string };
-
-/**
- * Confirme une réservation après encaissement de l'acompte.
- * - booking `offered` → `confirmed`, paymentStatus → `deposit_paid`
- * - insert dans `payments` (méthode stripe, statut succeeded)
- * - facture d'acompte émise (idempotente) et passée `paid`
- */
-export async function confirmDepositPayment(input: {
-  bookingId: string;
-  amountCents: number;
-  stripeSessionId?: string | null;
-  stripePaymentIntentId?: string | null;
-}): Promise<DepositPaymentResult> {
-  try {
-    return await db.transaction(async (tx) => {
-      const [booking] = await tx
-        .select()
-        .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
-        .for('update')
-        .limit(1);
-      if (!booking) return { ok: false, message: 'Réservation introuvable.' };
-
-      // Idempotence : webhook déjà traité.
-      if (booking.status === 'confirmed') {
-        return { ok: true, bookingId: booking.id };
-      }
-      if (booking.status !== 'offered') {
-        return { ok: false, message: `Statut inattendu : ${booking.status}.` };
-      }
-      if (input.amountCents !== booking.depositAmount) {
-        return {
-          ok: false,
-          message: `Montant payé (${input.amountCents}) ≠ acompte attendu (${booking.depositAmount}).`,
-        };
-      }
-
-      const paidAt = new Date();
-      await tx
-        .update(bookings)
-        .set({
-          status: 'confirmed',
-          paymentStatus: 'deposit_paid',
-          stripeCheckoutSessionId: input.stripeSessionId ?? booking.stripeCheckoutSessionId,
-          stripePaymentIntentId: input.stripePaymentIntentId ?? booking.stripePaymentIntentId,
-        })
-        .where(eq(bookings.id, booking.id));
-
-      await tx.insert(payments).values({
-        bookingId: booking.id,
-        amount: input.amountCents,
-        currency: 'EUR',
-        method: 'stripe',
-        stripePaymentIntentId: input.stripePaymentIntentId ?? null,
-        status: 'succeeded',
-        paidAt,
-      });
-
-      // Facture d'acompte (trace de remboursement) puis marquée payée.
-      const inv = await generateBookingInvoice(tx, booking.id, 'deposit');
-      if (inv.ok) {
-        await tx
-          .update(invoices)
-          .set({ status: 'paid', paidAt })
-          .where(eq(invoices.id, inv.invoiceId));
-      }
-
-      await logAudit(tx, {
-        action: 'booking.confirmed',
-        entityType: 'booking',
-        entityId: booking.id,
-        metadata: { amountCents: input.amountCents, method: 'stripe', source: 'checkout' },
-      });
-
-      return { ok: true, bookingId: booking.id };
-    });
-  } catch (error) {
-    console.error('confirmDepositPayment :', error);
-    return { ok: false, message: 'Erreur lors de la confirmation du paiement.' };
-  }
-}
 
 export type OnlinePaymentKind = 'deposit' | 'payment';
 
@@ -318,6 +232,11 @@ export async function cancelBooking(
         })
         .where(eq(bookings.id, booking.id));
 
+      // Libération effective des unités : sans suppression des segments, la
+      // contrainte d'exclusion DB continuerait de bloquer ces boxes alors que
+      // le checker les annonce libres (bug B2).
+      await tx.delete(bookingSegments).where(eq(bookingSegments.bookingId, booking.id));
+
       if (mustRefund) {
         const paidDeposit = await tx
           .select({
@@ -385,29 +304,37 @@ export async function cancelBooking(
 /**
  * Expire une offre non payée (cron) : statut `offered` → `expired`. Aucun
  * acompte n'ayant été encaissé, aucune facture/remboursement à traiter. Les
- * unités sont libérées par les vérifications (cancelled/expired exclus).
+ * segments sont supprimés pour libérer réellement les unités (contrainte DB).
  */
 export async function expireOfferedBooking(bookingId: string): Promise<CancelBookingResult> {
   try {
-    const [updated] = await db
-      .update(bookings)
-      .set({ status: 'expired', cancelledReason: 'Offre expirée (acompte non réglé)' })
-      .where(
-        sql`${bookings.id} = ${bookingId} AND ${bookings.status} = 'offered' AND ${bookings.offeredExpiresAt} < now()`
-      )
-      .returning({ id: bookings.id });
+    await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(bookings)
+        .set({ status: 'expired', cancelledReason: 'Offre expirée (acompte non réglé)' })
+        .where(
+          sql`${bookings.id} = ${bookingId} AND ${bookings.status} in ('proposed', 'offered') AND ${bookings.offeredExpiresAt} < now()`
+        )
+        .returning({ id: bookings.id });
 
-    if (!updated) {
-      return { ok: false, message: 'Offre non trouvée ou non expirable.' };
-    }
-    await db.insert(auditLogs).values({
-      action: 'booking.expired',
-      entityType: 'booking',
-      entityId: bookingId,
-      metadata: { reason: 'Offre expirée (acompte non réglé)' },
+      if (!updated) {
+        throw new Error('Offre non trouvée ou non expirable.');
+      }
+      // Libération des unités (cf. cancelBooking — bug B2).
+      await tx.delete(bookingSegments).where(eq(bookingSegments.bookingId, bookingId));
+
+      await logAudit(tx, {
+        action: 'booking.expired',
+        entityType: 'booking',
+        entityId: bookingId,
+        metadata: { reason: 'Offre expirée (acompte non réglé)' },
+      });
     });
     return { ok: true, refunded: false, message: 'Offre expirée.' };
   } catch (error) {
+    if (error instanceof Error && error.message.includes('non expirable')) {
+      return { ok: false, message: error.message };
+    }
     console.error('expireOfferedBooking :', error);
     return { ok: false, message: 'Erreur lors de l’expiration de l’offre.' };
   }

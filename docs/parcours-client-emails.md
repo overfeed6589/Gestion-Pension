@@ -76,7 +76,7 @@ Paiement : un seul montant valide à la fois, recalculé côté serveur.
 | # | Email | Déclencheur | Destinataire | Lien(s) inclus |
 |---|---|---|---|---|
 | E1 | Confirmation demande reçue | création booking `proposed` | client | `/espace/<jeton>` |
-| E2 | Client connu — « recevez vos informations » | étape email (client reconnu) | client | lien de reprise unique |
+| E2 | Client connu — lien d'accès | bouton wizard « Déjà client ? Recevoir un lien d’accès » (`/reserver`) | client | lien de reprise unique (30 min) |
 | E3 | Réservation validée — paiement | action staff « valider & envoyer » (`offered`) | client | `/espace/<jeton>` (paiement) |
 | E4 | Validation sans acompte | action staff « valider sans paiement » | client | `/espace/<jeton>` (solde) |
 | E5 | Compléter les infos animal | s'il manque I-CAD/vaccins | client | `/espace/<jeton>` |

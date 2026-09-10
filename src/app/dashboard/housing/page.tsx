@@ -11,7 +11,9 @@ import { formatCents } from '@/lib/money';
 export const dynamic = 'force-dynamic';
 
 export default async function HousingManagementPage() {
-  await requireRole('secretary');
+  // Lecture du parc : secretary (matrice A2) ET staff (planning/attribution de
+  // box). Les mutations restent réservées au rôle `owner` (actions.ts).
+  await requireRole('secretary', 'staff');
 
   const today = new Date().toISOString().slice(0, 10);
   const [categories, occupancy] = await Promise.all([

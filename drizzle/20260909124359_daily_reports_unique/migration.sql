@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "daily_reports_pet_date_idx" ON "daily_reports" ("pet_id","report_date");

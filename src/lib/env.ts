@@ -53,6 +53,10 @@ const serverEnvSchema = z.object({
 
   // Sécurité du cron (Phase G6) : en-tête Bearer exigé si renseigné.
   CRON_SECRET: z.string().min(1, 'CRON_SECRET manquante').optional(),
+
+  // Signature des sessions espace client (/espace?resume=…). Optionnel :
+  // en dev on dérive un secret de développement.
+  ESPACE_SESSION_SECRET: z.string().min(16).optional(),
 });
 
 function loadServerEnv() {

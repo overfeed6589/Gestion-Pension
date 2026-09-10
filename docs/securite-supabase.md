@@ -57,7 +57,26 @@ Emails) + éventuellement un **Custom SMTP** (gratuit) pour l'envoi depuis ton d
 - Vérifier après déploiement (HTTPS) que les cookies `sb-*` partent avec
   `HttpOnly`, `SameSite=Lax`, `Secure` (fait en code A3).
 
-## 6. Clés & variables d'environnement
+## 6. Data API / PostgREST (critique — vérifier en console)
+
+L'exposition `/rest/v1` de Supabase (Data API) est **désormais neutralisée côté
+base** : la migration `20260909123239_rls_deny_by_default` a activé **ROW LEVEL
+SECURITY sur toutes les tables** du schéma `public` **sans aucune policy pour
+`anon`/`authenticated`** (deny-by-default). Conséquences :
+
+- via `https://<projet>.supabase.co/rest/v1/...` avec la clé anon : **aucune
+  ligne lisible, aucune écriture possible** (aucune policy) ;
+- l'application (Drizzle, rôle `app_user` en connexion Postgres directe) passe
+  par la policy `app_user_full_access` (`USING (true) WITH CHECK (true)`), elle
+  n'est pas impactée.
+
+À **vérifier** après déploiement (fait une fois en console) :
+- **Settings → API** : ne rien exposer de plus ; idéalement retirer les tables du
+  schéma `public` exposé (« Exposed schemas ») si aucune intégration PostgREST
+  n'est prévue ;
+- tester un `GET /rest/v1/clients?select=*` avec la clé anon → **liste vide**.
+
+## 7. Clés & variables d'environnement
 
 Ne garder que ce qui est utilisé. Références vérifiées dans le code :
 `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
@@ -72,15 +91,31 @@ Ne garder que ce qui est utilisé. Références vérifiées dans le code :
   risque si l'env fuit ; la supprimer tant qu'aucun code admin Supabase n'en a besoin)
 - `SUPABASE_JWKS_URL` (inutilisée)
 
-À **conserver** : `RESEND_API_KEY` (fonctionnalité emails prévue).
+À **conserver** : `RESEND_API_KEY` (emails), `STRIPE_SECRET_KEY` +
+`STRIPE_WEBHOOK_SECRET` (paiements), `CRON_SECRET` (**obligatoire en
+production** : le cron `/api/cron/daily` refuse de s'exécuter sans lui),
+`ESPACE_SESSION_SECRET` (signature des sessions `/espace?resume=…`,
+optionnel en dev).
+
+## 8. Jetons d'accès espace client (M1/M2)
+
+- Seul le **hash SHA-256** des jetons est stocké en base
+  (`clients.access_token_hash`, `client_resume_links.token_hash`) : une fuite de
+  la base ne donne pas accès aux espaces.
+- Les emails transactionnels utilisent des **liens de reprise à usage unique**
+  (`/espace?resume=…`) qui posent une session signée en cookie (HMAC,
+  `ESPACE_SESSION_SECRET`), sans jamais remettre le jeton dossier en circulation.
+- Le jeton dossier est **rotatable** : bouton « Régénérer le lien d’accès »
+  sur la fiche client (dashboard) — l'ancien jeton est révoqué immédiatement.
 
 Règles :
 - aucune clé secrète dans une variable `NEXT_PUBLIC_` ;
 - `.env.local` est gitignoré : ne jamais le committer ;
 - activer **2FA sur le compte admin Supabase** lui-même.
 
-## 7. Vérification finale
+## 9. Vérification finale
 
 - Se déconnecter puis se reconnecter (les cookies `secure` ne passent qu'en HTTPS).
 - Tenter `POST` sur une action non autorisée → redirection `/dashboard`.
 - Tenter de créer un compte via l'API Supabase REST → rejeté (sign-up off).
+- `GET /rest/v1/clients?select=*` avec la clé anon → **liste vide** (RLS).

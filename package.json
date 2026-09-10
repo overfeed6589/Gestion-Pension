@@ -41,5 +41,8 @@
     "tsx": "^4.23.13",
     "typescript": "^5",
     "vitest": "^4.1.11"
+  },
+  "allowScripts": {
+    "opencode-ai@1.18.29": true
   }
 }

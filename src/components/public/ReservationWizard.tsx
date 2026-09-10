@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   proposeAvailabilityAction,
   submitProposalAction,
+  requestResumeLinkAction,
 } from '@/app/reserver/actions';
 import type { PublicAvailabilityResult, PublicCategoryOption } from '@/lib/availability';
 import type { CreatePublicProposalInput, PublicPetInput } from '@/lib/public-reservation';
@@ -32,13 +33,14 @@ export function ReservationWizard() {
 
   const [dates, setDates] = useState({ startDate: todayPlus(1), endDate: todayPlus(8) });
   const [petCount, setPetCount] = useState(1);
-  const [contact, setContact] = useState({ firstName: '', lastName: '', email: '', phone: '', address: '' });
+  const [contact, setContact] = useState({ firstName: '', lastName: '', email: '', phone: '', address: '', website: '' });
   const [consent, setConsent] = useState(false);
 
   const [availability, setAvailability] = useState<PublicAvailabilityResult | null>(null);
   const [selected, setSelected] = useState<FullOption | SplitOption | null>(null);
   const [pets, setPets] = useState<PublicPetInput[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -98,12 +100,32 @@ export function ReservationWizard() {
     setStep(3);
   };
 
+  // E2 : client déjà connu → envoi d'un lien de reprise vers son espace.
+  const sendResumeLink = async () => {
+    setError(null);
+    setInfo(null);
+    if (!contact.email) return setError('Renseignez d’abord votre email.');
+    setLoading(true);
+    try {
+      const res = await requestResumeLinkAction(contact.email);
+      setInfo(res.message ?? '');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const submit = async () => {
     if (!consent) return setError('Consentement requis pour traiter votre demande.');
     if (!selected || pets.length !== petCount) return setError('Formulaire incomplet.');
     const payload: CreatePublicProposalInput = {
-      contact: { ...contact, address: contact.address || null },
-      checkInDate: dates.startDate,
+      contact: {
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email,
+        phone: contact.phone,
+        address: contact.address || null,
+      },
+      website: contact.website || undefined,      checkInDate: dates.startDate,
       checkOutDate: dates.endDate,
       petCount,
       pets,
@@ -164,6 +186,11 @@ export function ReservationWizard() {
               <label className={label}>Adresse (optionnel)</label>
               <input className={input} value={contact.address} onChange={(e) => setContact({ ...contact, address: e.target.value })} />
             </div>
+            {/* Honeypot anti-spam : champ invisible pour les humains, rempli par les bots */}
+            <div className="hidden col-span-2" aria-hidden="true">
+              <label htmlFor="website">Site web</label>
+              <input id="website" name="website" tabIndex={-1} autoComplete="off" value={contact.website} onChange={(e) => setContact({ ...contact, website: e.target.value })} />
+            </div>
             <div>
               <label className={label}>Arrivée</label>
               <input type="date" className={input} value={dates.startDate} onChange={(e) => setDates({ ...dates, startDate: e.target.value })} />
@@ -181,9 +208,20 @@ export function ReservationWizard() {
               </select>
             </div>
           </div>
-          <button className={btn} onClick={searchAvailability} disabled={loading}>
-            {loading ? <Spinner label="Recherche…" /> : 'Voir les disponibilités →'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button className={btn} onClick={searchAvailability} disabled={loading}>
+              {loading ? <Spinner label="Recherche…" /> : 'Voir les disponibilités →'}
+            </button>
+            <button
+              type="button"
+              className="text-xs underline text-slate-700"
+              onClick={sendResumeLink}
+              disabled={loading}
+            >
+              Déjà client ? Recevoir un lien d’accès
+            </button>
+          </div>
+          {info && <p className="text-xs text-emerald-700">{info}</p>}
         </div>
       )}
 

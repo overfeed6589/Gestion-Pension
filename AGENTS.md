@@ -47,4 +47,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Data gotchas
 - Money is stored in **integer cents** (`basePricePerNight`, `totalPrice`, `defaultPrice`, `segmentPrice`, `amount`…); divide by 100 for display.
 - Some date columns are `timestamp` (`bookings.checkInDate`) while `booking_segments.startDate/endDate` are `date`; existing code inserts them via `.toISOString()`.
-- UI uses shadcn-style token classes (`bg-card`, `text-muted-foreground`, `border-border`, …) but `globals.css` only imports Tailwind — those tokens are **not defined** yet, so those elements render unstyled.
+- UI uses shadcn-style token classes (`bg-card`, `text-muted-foreground`, `border-border`, …) — they are defined in `globals.css` via a `@theme` block (Tailwind v4 CSS-first).

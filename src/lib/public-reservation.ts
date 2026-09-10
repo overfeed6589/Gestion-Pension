@@ -6,7 +6,7 @@ import { buildSegmentsForGroup } from '@/lib/split-plan';
 import { createBookingSegmentTx } from '@/lib/scheduling/allocation';
 import { computeDepositAmount } from '@/lib/pricing';
 import { getPensionSettings } from '@/lib/settings';
-import { ensureClientAccessToken } from '@/lib/client-access';
+import { espaceLinkForClient } from '@/lib/client-access';
 import { sendBookingEmailOnce } from '@/lib/outbound-emails';
 import { layoutHtml } from '@/lib/integrations/email';
 import { appBaseUrl } from '@/lib/integrations/stripe';
@@ -57,10 +57,12 @@ export type CreatePublicProposalInput = {
   option: ClientOptionInput;
   consent: true;
   requestNotes?: string | null;
+  /** Honeypot anti-spam : invisible côté humain, doit rester vide. */
+  website?: string;
 };
 
 export type CreatePublicProposalResult =
-  | { ok: true; bookingId: string; token: string }
+  | { ok: true; bookingId: string }
   | { ok: false; message: string };
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -149,7 +151,7 @@ export async function createPublicProposal(
   const email = input.contact.email.trim().toLowerCase();
 
   try {
-    const { bookingId, token } = await db.transaction(async (tx) => {
+    const { bookingId, espaceUrl } = await db.transaction(async (tx) => {
       // 1. Client (existant par email ou créé).
       const [existing] = await tx
         .select({ id: clients.id })
@@ -171,8 +173,8 @@ export async function createPublicProposal(
         clientId = created.id;
       }
 
-      // 2. Jeton dossier garanti (envoyé par email).
-      const token = await ensureClientAccessToken(tx, clientId);
+      // 2. Lien d'accès espace garanti (jeton dossier neuf ou lien de reprise).
+      const { url: espaceUrl } = await espaceLinkForClient(tx, clientId, appBaseUrl());
 
       // 3. Création des animaux (base, I-CAD optionnel).
       const petIds: string[] = [];
@@ -227,12 +229,12 @@ export async function createPublicProposal(
         requestNotes: input.requestNotes,
       });
 
-      return { bookingId, token };
+      return { bookingId, espaceUrl };
     });
 
     // 6. Email E1 (best effort, dédupliqué).
     const settings = await getPensionSettings();
-    const link = `${appBaseUrl()}/espace/${token}`;
+    const link = espaceUrl;
     try {
       await sendBookingEmailOnce({
         bookingId,
@@ -251,7 +253,7 @@ export async function createPublicProposal(
       console.error('createPublicProposal — email E1 :', error);
     }
 
-    return { ok: true, bookingId, token };
+    return { ok: true, bookingId };
   } catch (error) {
     console.error('createPublicProposal :', error);
     return {

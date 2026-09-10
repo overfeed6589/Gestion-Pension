@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { clients, pets } from '@/db/schema';
 import { createClientWithPetSchema, createPetSchema } from '@/lib/validations/client-pet';
+import { rotateClientAccessToken } from '@/lib/client-access';
+import { appBaseUrl } from '@/lib/integrations/stripe';
 import { ActionState } from '@/types/actions';
 import { requireRole } from '@/lib/auth';
 
@@ -145,5 +147,29 @@ export async function createPetForClientAction(
   } catch (error) {
     console.error('createPetForClientAction :', error);
     return { success: false, message: "Erreur lors de l'ajout de l'animal." };
+  }
+}
+
+/**
+ * Régénère le lien d'accès espace d'un client (M2) : révoque l'ancien jeton
+ * dossier et en émet un nouveau. Le nouveau lien est retourné une seule fois
+ * (le jeton n'est jamais stocké en clair) — à transmettre au client par le
+ * canal habituel. Rôle secretary/owner.
+ */
+export async function rotateClientAccessTokenAction(clientId: string): Promise<ActionState> {
+  await requireRole('secretary');
+
+  try {
+    const newToken = await rotateClientAccessToken(clientId);
+    if (!newToken) return { success: false, message: 'Client introuvable.' };
+    revalidatePath('/dashboard/clients');
+    return {
+      success: true,
+      message: 'Nouveau lien généré (l’ancien est révoqué) :',
+      data: { accessUrl: `${appBaseUrl()}/espace/${newToken}` },
+    };
+  } catch (error) {
+    console.error('rotateClientAccessTokenAction :', error);
+    return { success: false, message: 'Erreur lors de la rotation du lien.' };
   }
 }

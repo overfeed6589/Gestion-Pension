@@ -47,6 +47,16 @@ export async function GET() {
     }
   }
 
+  const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV;
+  // En production, on n'expose ni la liste des envs, ni le message d'erreur DB
+  // brut (risque de reconnaissance), ni les détails d'environnement.
+  if (isProd) {
+    return NextResponse.json({
+      status: db.ok ? 'ok' : 'error',
+      db: { ok: db.ok },
+    });
+  }
+
   return NextResponse.json({
     status: db.ok ? 'ok' : 'error',
     envPresent: present,

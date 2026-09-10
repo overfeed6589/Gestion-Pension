@@ -38,8 +38,8 @@ Resend branché (domaine vérifié), Supabase durci (checklist `docs/securite-su
 
 ## 4. Réservation publique (parcours v2)
 1. Landing → « Réserver en ligne » (`/reserver`) : dates + coordonnées.
-2. **Nouvel email** : saisie libre ; **email connu** : « recevoir mes infos » → lien unique →
-   prérempli (coordonnées + animaux cochables).
+2. **Nouvel email** : saisie libre ; **email connu** : bouton « Déjà client ? Recevoir un lien
+   d’accès » → email avec lien unique (30 min) qui ouvre l’espace client (dossier + animaux).
 3. Propositions : catégories libres en continu + solution en découpage (si pertinent) ;
    vérifier que le prix estimé = nb nuits × tarif/nuit.
 4. Saisir les animaux (I-CAD optionnel) → envoyer.

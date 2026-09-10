@@ -2,6 +2,7 @@ import { db } from '@/db';
 import { requireRole } from '@/lib/auth';
 import { ClientPetForm } from '@/components/clients/ClientPetForm';
 import { PetAddForm } from '@/components/clients/PetAddForm';
+import { RotateAccessLinkButton } from '@/components/clients/RotateAccessLinkButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,9 @@ export default async function ClientsPage() {
                 </div>
                 <div className="mt-2 border-t pt-2">
                   <PetAddForm clientId={client.id} />
+                  <div className="mt-2">
+                    <RotateAccessLinkButton clientId={client.id} />
+                  </div>
                 </div>
               </div>
             ))

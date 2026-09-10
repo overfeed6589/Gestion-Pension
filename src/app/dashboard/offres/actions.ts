@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm';
 import { createBookingWithOffer, attachOfferToBooking, rebuildBookingOffer, type CreateOfferInput, type AttachOfferInput, type RebuildOfferInput } from '@/lib/booking-offers';
 import { createDepositCheckoutSession, appBaseUrl } from '@/lib/integrations/stripe';
 import { cancelBooking } from '@/lib/payments';
-import { ensureClientAccessToken } from '@/lib/client-access';
+import { espaceLinkForClient } from '@/lib/client-access';
 import { sendBookingEmailOnce } from '@/lib/outbound-emails';
 import { layoutHtml } from '@/lib/integrations/email';
 import { getPensionSettings } from '@/lib/settings';
@@ -162,12 +162,13 @@ export async function validateProposedBookingAction(bookingId: string): Promise<
     }
     if (!booking.client) return { success: false, message: 'Client introuvable.' };
 
-    const token = await db.transaction(async (tx) => ensureClientAccessToken(tx, booking.clientId));
+    const link = await db.transaction(async (tx) =>
+      espaceLinkForClient(tx, booking.clientId, appBaseUrl()).then((r) => r.url)
+    );
 
     await db.update(bookings).set({ status: 'offered' }).where(eq(bookings.id, bookingId));
 
     const settings = await getPensionSettings();
-    const link = `${appBaseUrl()}/espace/${token}`;
     try {
       await sendBookingEmailOnce({
         bookingId,
@@ -222,14 +223,15 @@ export async function validateWithoutPaymentAction(bookingId: string): Promise<A
     }
     if (!booking.client) return { success: false, message: 'Client introuvable.' };
 
-    const token = await db.transaction(async (tx) => ensureClientAccessToken(tx, booking.clientId));
+    const link = await db.transaction(async (tx) =>
+      espaceLinkForClient(tx, booking.clientId, appBaseUrl()).then((r) => r.url)
+    );
     await db
       .update(bookings)
       .set({ status: 'confirmed', paymentStatus: 'unpaid' })
       .where(eq(bookings.id, bookingId));
 
     const settings = await getPensionSettings();
-    const link = `${appBaseUrl()}/espace/${token}`;
     try {
       await sendBookingEmailOnce({
         bookingId,

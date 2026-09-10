@@ -78,11 +78,15 @@ Règles :
   Correctif review : le chevauchement de `assignUnitToSegment` est vérifié sur les
   **dates stockées** du segment (lues sous verrou), plus catch `23P01`/`23505` →
   « box occupé » au lieu d'une erreur 500.
-- **B2 (script prêt — à exécuter)** `npm run db:constraints`
+- **B2 (fait — script + migration)** `npm run db:constraints`
   (`scripts/apply-constraints.ts`, en DIRECT/5432, idempotent) : extension
   `btree_gist` + contrainte `booking_segments_no_overlap`
   (`EXCLUDE USING gist` sur unit_id + `daterange`), garantie DB en cas d'accès
   concurrent ou d'écriture hors code applicatif. Préflight des doublons existants.
+  Correctif review (B2b) : la contrainte ne peut pas filtrer le statut (porté par
+  `bookings`) — `cancelBooking`/`expireOfferedBooking` **suppriment désormais les
+  segments** (migration de purge `20260909123305_contrainte_expired`), sinon les
+  unités restaient bloquées à vie après annulation/expiration.
 - **B3 (fait)** `occupancy.ts` réécrit : occupation **dérivée des segments** en SQL
   (aucune dépendance au booléen `is_available`, réservé au « hors service » manuel).
 - **B4 (partiel)** Fin effective d'un séjour = `COALESCE(actual_check_out, end_date)`
@@ -298,3 +302,51 @@ A1 → A2 → A4/A5 → B1/B2 → A3 (console) → C → D (migrations + CI + te
 → **G (itération 1, cible mi-octobre)** → **G9 (parcours client v2)** → E → F.
 Chaque étape : implémentation commentée → vérification (`npx tsc --noEmit`, `npm run lint`)
 → proposition de commit → validation manuelle.
+
+---
+
+## Review sécurité + fonctionnalités (2026-09-09) — correctifs appliqués
+
+**Sécurité (H = haute, M = moyenne)**
+- **C1 — RLS deny-by-default** : migration `20260909123239_rls_deny_by_default`
+  active RLS sur les 27 tables `public`, sans policy pour `anon`/`authenticated`
+  (Data API PostgREST aveugle) et avec `app_user_full_access` pour `app_user`
+  (l'app ne passe que par Drizzle). Doc : `docs/securite-supabase.md` §6.
+- **H1 — Mass-assignment `completePetAction`** : allow-list zod
+  (`clientPetCompletionSchema`), jamais `clientId`/`species`/`vaccines`.
+- **H2 — Cron fail-closed** : `/api/cron/daily` renvoie 500 en production si
+  `CRON_SECRET` est absente (avant : garde conditionnelle = endpoint ouvert).
+- **H3 — Anti-abus public** : table `rate_limit_hits` + `lib/rate-limit.ts`
+  (compteur persistant par IP hashée) sur `/reserver` (recherche + soumission),
+  ancienne demande publique (supprimée) et `/login` ; honeypot dans le wizard.
+- **M1/M2 — Jetons hashés + rotation** : `lib/tokens.ts` (SHA-256, temps
+  constant) ; `clients.access_token_hash` (colonne legacy conservée pour la
+  transition, re-hash au premier usage) ; liens de reprise à usage unique dans
+  les emails via session cookie signée (`lib/espace-session.ts`) ; bouton
+  « Régénérer le lien d’accès » côté dashboard.
+- **M4 — Headers HTTP** : `next.config.ts` (HSTS, nosniff, DENY, Referrer-Policy,
+  Permissions-Policy, CSP Report-Only).
+- **M5 — `/api/health`** : réponse élaguée en production (pas d'envs ni d'erreur
+  DB brute).
+
+**Bugs fonctionnels**
+- Contrainte EXCLUDE vs `expired` : suppression des segments dans
+  `cancelBooking`/`expireOfferedBooking` + purge en migration
+  (`20260909123305_contrainte_expired`).
+- Cron : expiration des `proposed` ET `offered`.
+- Check-in/out : machine à états (`confirmed`→check-in, `checked_in`→check-out),
+  verrou `FOR UPDATE`.
+- `housing/page.tsx` ouverte au rôle `staff` (lecture), mutations toujours `owner`.
+
+**Complétion it1**
+- **E2** : bouton wizard « Déjà client ? Recevoir un lien d’accès »
+  (`requestResumeLinkAction`, réponse non énumérable, rate-limit strict).
+- **Pages** : `/dashboard/bookings` (+ détail), `/dashboard/invoices` (génération
+  facture finale + Pennylane), `/dashboard/purchase-orders` (création + réception)
+  ; numérotation commandes séquentielle sous `pg_advisory_xact_lock`.
+- **Tâches du jour** : cochage persisté dans `daily_reports` (index unique
+  pet/date, migration dédiée).
+- Nav dashboard filtrée par rôle ; suppression du code mort
+  (`DemandeForm`, `submitPublicDemandeAction`, `confirmDepositPayment`,
+  `public-demandes.ts`) ; `bookingFinancialState` sécurisée (try/catch).
+- Tests : 47 Vitest verts (ajout : allow-list complétion + jetons).

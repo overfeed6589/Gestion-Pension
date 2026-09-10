@@ -1,7 +1,8 @@
 import { db } from '@/db';
-import { bookings, bookingSegments, pets } from '@/db/schema';
+import { bookings, bookingSegments, dailyReports, pets } from '@/db/schema';
 import { and, sql } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth';
+import { TaskDoneCheckbox } from '@/components/taches/TaskDoneCheckbox';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,8 @@ export const dynamic = 'force-dynamic';
 // son espace et les informations utiles au travail du jour : alimentation
 // (diet_notes du séjour), soins/vigilance (medical_notes de la fiche animal),
 // et notes internes importantes (comportement craintif/agressif, etc.).
-// La validation « fait » sera persistée via `daily_reports` (pas dans ce lot).
+// Le cochage « fait » est persisté dans `daily_reports` (une ligne par
+// animal/jour, voir toggleDailyTaskDoneAction).
 // ---------------------------------------------------------------------------
 
 export default async function TachesPage({
@@ -34,6 +36,7 @@ export default async function TachesPage({
       species: pets.species,
       medicalNotes: pets.medicalNotes,
       unitId: bookingSegments.unitId,
+      segmentId: bookingSegments.id,
       unitName: sql<string>`u.name`,
       categoryName: sql<string>`c.name`,
       bookingId: bookings.id,
@@ -62,6 +65,13 @@ export default async function TachesPage({
       )
     )
     .orderBy(sql`u.name`);
+
+  // Tâches déjà cochées pour cette date (daily_reports).
+  const doneRows = await db
+    .select({ petId: dailyReports.petId })
+    .from(dailyReports)
+    .where(sql`${dailyReports.reportDate} = ${dateStr}::date`);
+  const donePetIds = new Set(doneRows.map((r) => r.petId));
 
   const grouped = new Map<string, typeof rows>();
   for (const row of rows) {
@@ -110,10 +120,18 @@ export default async function TachesPage({
                 </div>
                 {unitRows.map((row) => (
                   <div key={row.petId} className="border rounded-lg p-3 space-y-1">
-                    <p className="font-semibold text-sm">
-                      {row.petName}{' '}
-                      <span className="text-xs font-normal text-slate-700">({row.species})</span>
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-sm">
+                        {row.petName}{' '}
+                        <span className="text-xs font-normal text-slate-700">({row.species})</span>
+                      </p>
+                      <TaskDoneCheckbox
+                        petId={row.petId}
+                        segmentId={row.segmentId}
+                        date={dateStr}
+                        done={donePetIds.has(row.petId)}
+                      />
+                    </div>
                     <p className="text-xs text-slate-700">Propriétaire : {row.clientLabel}</p>
                     {row.dietNotes && (
                       <p className="text-xs">

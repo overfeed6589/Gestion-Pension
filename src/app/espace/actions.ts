@@ -1,20 +1,31 @@
 'use server';
 
 import { db } from '@/db';
-import { bookings, pets, payments } from '@/db/schema';
+import { bookings, clients, pets, payments } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { findClientByAccessToken } from '@/lib/client-access';
+import { readEspaceSession } from '@/lib/espace-session';
 import { createDepositCheckoutSession } from '@/lib/integrations/stripe';
 import { getPensionSettings } from '@/lib/settings';
+import { clientPetCompletionSchema } from '@/lib/validations/client-pet';
 import { ActionState } from '@/types/actions';
 
 // ---------------------------------------------------------------------------
-// Espace client (jeton) — G9. PAS de compte : le jeton = le moyen d'accès.
-// Toutes les actions vérifient d'abord que le client possède l'élément.
+// Espace client (jeton OU session resume) — G9. PAS de compte : le jeton ou le
+// cookie de session resume = le moyen d'accès. Toutes les actions vérifient
+// d'abord que le client possède l'élément.
 // ---------------------------------------------------------------------------
 
-async function guardClient(token: string) {
-  const client = await findClientByAccessToken(token);
+async function guardClient(token?: string | null) {
+  if (token) {
+    const client = await findClientByAccessToken(token);
+    if (!client) throw new Error('Lien invalide ou expiré.');
+    return client;
+  }
+  // Accès via session resume (cookie signé posé par /espace?resume=…).
+  const clientId = await readEspaceSession();
+  if (!clientId) throw new Error('Session absente ou expirée.');
+  const [client] = await db.select().from(clients).where(eq(clients.id, clientId)).limit(1);
   if (!client) throw new Error('Lien invalide ou expiré.');
   return client;
 }
@@ -56,7 +67,19 @@ export async function completePetAction(
       .limit(1);
     if (!pet) return { success: false, message: 'Animal introuvable.' };
 
-    await db.update(pets).set({ ...fields }).where(eq(pets.id, petId));
+    // Allow-list zod : le jeton client ne peut modifier que les champs métier
+    // prévus (jamais `clientId`, `species`, `name`, `vaccines`…).
+    const parsed = clientPetCompletionSchema.safeParse(fields);
+    if (!parsed.success) {
+      return { success: false, message: 'Champs invalides pour la complétion.' };
+    }
+    const patch = Object.fromEntries(
+      Object.entries(parsed.data).filter(([, v]) => v !== undefined)
+    );
+    if (Object.keys(patch).length === 0) {
+      return { success: false, message: 'Aucune modification fournie.' };
+    }
+    await db.update(pets).set(patch).where(eq(pets.id, petId));
     return { success: true, message: 'Informations mises à jour.' };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : 'Erreur.' };
@@ -142,8 +165,8 @@ export async function payBookingAction(
       description: `Réservation du ${booking.checkInDate.toISOString().slice(0, 10)} → ${booking.checkOutDate
         .toISOString()
         .slice(0, 10)}`,
-      successPath: `/espace/${token}`,
-      cancelPath: `/espace/${token}`,
+      successPath: token ? `/espace/${token}` : '/espace',
+      cancelPath: token ? `/espace/${token}` : '/espace',
     });
     if (!session.ok) return { success: false, message: session.message };
 
@@ -160,17 +183,21 @@ export async function payBookingAction(
 
 /** Statut d'un booking pour affichage (et soldes). */
 export async function bookingFinancialState(token: string, bookingId: string) {
-  const client = await guardClient(token);
-  const booking = await ownBooking(client.id, bookingId);
-  if (!booking) return null;
-  const paid = await bookingPaidSum(bookingId);
-  const outstanding = Math.max(0, booking.totalPrice - paid);
-  return {
-    bookingId: booking.id,
-    status: booking.status,
-    paid,
-    outstanding,
-    depositAmount: booking.depositAmount,
-    totalPrice: booking.totalPrice,
-  };
+  try {
+    const client = await guardClient(token);
+    const booking = await ownBooking(client.id, bookingId);
+    if (!booking) return null;
+    const paid = await bookingPaidSum(bookingId);
+    const outstanding = Math.max(0, booking.totalPrice - paid);
+    return {
+      bookingId: booking.id,
+      status: booking.status,
+      paid,
+      outstanding,
+      depositAmount: booking.depositAmount,
+      totalPrice: booking.totalPrice,
+    };
+  } catch {
+    return null;
+  }
 }

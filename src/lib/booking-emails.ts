@@ -1,7 +1,7 @@
 import { db } from '@/db';
 import { bookings, clients, pets } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
-import { ensureClientAccessToken } from '@/lib/client-access';
+import { espaceLinkForClient } from '@/lib/client-access';
 import { sendBookingEmailOnce } from '@/lib/outbound-emails';
 import { layoutHtml } from '@/lib/integrations/email';
 import { appBaseUrl } from '@/lib/integrations/stripe';
@@ -21,16 +21,15 @@ async function clientAccessForBooking(bookingId: string) {
     with: { client: true },
   });
   if (!booking?.client) return null;
-  const token = await db.transaction(async (tx) =>
-    ensureClientAccessToken(tx, booking.clientId)
+  const { url } = await db.transaction(async (tx) =>
+    espaceLinkForClient(tx, booking.clientId, appBaseUrl())
   );
   const settings = await getPensionSettings();
   return {
     booking,
-    token,
     email: booking.client.email,
     firstName: booking.client.firstName,
-    link: `${appBaseUrl()}/espace/${token}`,
+    link: url,
     pensionName: settings.pensionName,
   };
 }

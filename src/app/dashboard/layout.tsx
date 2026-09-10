@@ -7,20 +7,25 @@ import { logout } from '@/app/login/action';
 // ---------------------------------------------------------------------------
 // Shell du dashboard (Phase G — Lot 3)
 // ---------------------------------------------------------------------------
-// Navigation minimale vers les modules existants. La sécurité repose sur les
-// gardes `requireRole` des actions ; ici on vérifie seulement la session.
+// Navigation filtrée par rôle (les gardes `requireRole` des pages restent la
+// vraie sécurité ; ici c'est ergonomique). `dev`/`owner` (boss) voient tout.
 // ---------------------------------------------------------------------------
 
-const NAV_LINKS = [
-  { href: '/dashboard', label: 'Tableau de bord' },
-  { href: '/dashboard/offres', label: 'Offres & réservations' },
-  { href: '/dashboard/register', label: 'Registre / planning' },
-  { href: '/dashboard/taches', label: 'Tâches du jour' },
-  { href: '/dashboard/fiches', label: 'Fiches techniques' },
-  { href: '/dashboard/clients', label: 'Clients' },
-  { href: '/dashboard/housing', label: 'Logements & box' },
-  { href: '/dashboard/rapports', label: 'Rapports' },
-  { href: '/dashboard/parametres', label: 'Paramètres' },
+type NavLink = { href: string; label: string; roles: string[] };
+
+const NAV_LINKS: NavLink[] = [
+  { href: '/dashboard', label: 'Tableau de bord', roles: ['secretary', 'staff', 'owner', 'dev'] },
+  { href: '/dashboard/offres', label: 'Offres & réservations', roles: ['secretary', 'owner', 'dev'] },
+  { href: '/dashboard/bookings', label: 'Réservations', roles: ['secretary', 'staff', 'owner', 'dev'] },
+  { href: '/dashboard/register', label: 'Registre / planning', roles: ['secretary', 'staff', 'owner', 'dev'] },
+  { href: '/dashboard/taches', label: 'Tâches du jour', roles: ['staff', 'owner', 'dev'] },
+  { href: '/dashboard/fiches', label: 'Fiches techniques', roles: ['staff', 'owner', 'dev'] },
+  { href: '/dashboard/clients', label: 'Clients', roles: ['secretary', 'owner', 'dev'] },
+  { href: '/dashboard/invoices', label: 'Factures', roles: ['secretary', 'owner', 'dev'] },
+  { href: '/dashboard/housing', label: 'Logements & box', roles: ['secretary', 'staff', 'owner', 'dev'] },
+  { href: '/dashboard/purchase-orders', label: 'Commandes', roles: ['owner', 'dev'] },
+  { href: '/dashboard/rapports', label: 'Rapports', roles: ['owner', 'dev'] },
+  { href: '/dashboard/parametres', label: 'Paramètres', roles: ['owner', 'dev'] },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -38,7 +43,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <p className="text-xs text-slate-400 mt-1">Itération 1 — pilote</p>
         </div>
         <nav className="flex-1 px-2 py-4 space-y-1">
-          {NAV_LINKS.map((link) => (
+          {NAV_LINKS.filter(
+            (link) => !profile?.role || link.roles.includes(profile.role)
+          ).map((link) => (
             <Link
               key={link.href}
               href={link.href}

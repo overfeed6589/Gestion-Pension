@@ -17,20 +17,28 @@ export async function checkInBookingAction(bookingId: string): Promise<ActionSta
   const actor = await requireRole('staff');
 
   try {
+    let blocked: string | null = null;
     await db.transaction(async (tx) => {
-      // 1. Mettre à jour la réservation : statut et date réelle d'entrée
-      const [updatedBooking] = await tx
+      // Verrou + machine à états : seul un séjour `confirmed` peut entrer en garde.
+      const [booking] = await tx
+        .select({ id: bookings.id, status: bookings.status })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId))
+        .for('update')
+        .limit(1);
+      if (!booking) throw new Error("Réservation introuvable.");
+      if (booking.status !== 'confirmed') {
+        blocked = `Check-in impossible depuis l'état « ${booking.status} » (réservation « confirmed » requise).`;
+        return;
+      }
+
+      await tx
         .update(bookings)
         .set({
           status: 'checked_in',
           actualCheckIn: new Date(),
         })
-        .where(eq(bookings.id, bookingId))
-        .returning();
-
-      if (!updatedBooking) {
-        throw new Error("Réservation introuvable.");
-      }
+        .where(eq(bookings.id, bookingId));
 
       // B3 : l'occupation est DÉRIVÉE des segments (checker/allocation/occupancy).
       // On ne touche plus à `housing_units.is_available` (réservé au « hors
@@ -45,6 +53,8 @@ export async function checkInBookingAction(bookingId: string): Promise<ActionSta
         metadata: { checkedInAt: new Date().toISOString() },
       });
     });
+
+    if (blocked) return { success: false, message: blocked };
 
     revalidatePath(`/dashboard/bookings/${bookingId}`);
     revalidatePath('/dashboard/bookings');
@@ -64,20 +74,28 @@ export async function checkOutBookingAction(bookingId: string): Promise<ActionSt
   const actor = await requireRole('staff');
 
   try {
+    let blocked: string | null = null;
     await db.transaction(async (tx) => {
-      // 1. Mettre à jour la réservation : statut et date réelle de sortie
-      const [updatedBooking] = await tx
+      // Verrou + machine à états : seul un séjour `checked_in` peut sortir.
+      const [booking] = await tx
+        .select({ id: bookings.id, status: bookings.status })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId))
+        .for('update')
+        .limit(1);
+      if (!booking) throw new Error("Réservation introuvable.");
+      if (booking.status !== 'checked_in') {
+        blocked = `Check-out impossible depuis l'état « ${booking.status} » (animal non présent).`;
+        return;
+      }
+
+      await tx
         .update(bookings)
         .set({
           status: 'checked_out',
           actualCheckOut: new Date(),
         })
-        .where(eq(bookings.id, bookingId))
-        .returning();
-
-      if (!updatedBooking) {
-        throw new Error("Réservation introuvable.");
-      }
+        .where(eq(bookings.id, bookingId));
       // B3 : l'occupation est DÉRIVÉE des segments. Un départ réel (anticipé ou
       // non) libère l'unité via `COALESCE(actual_check_out, end_date)` dans
       // checker/allocation/occupancy. On ne mute pas `is_available`.
@@ -91,6 +109,8 @@ export async function checkOutBookingAction(bookingId: string): Promise<ActionSt
         metadata: { checkedOutAt: new Date().toISOString() },
       });
     });
+
+    if (blocked) return { success: false, message: blocked };
 
     revalidatePath(`/dashboard/bookings/${bookingId}`);
     revalidatePath('/dashboard/bookings');

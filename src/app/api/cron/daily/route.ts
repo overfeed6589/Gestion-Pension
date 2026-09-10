@@ -21,7 +21,15 @@ export const dynamic = 'force-dynamic';
  * 3. Séjours confirmés à J-7 : rappel du solde restant dû.
  */
 export async function POST(request: Request) {
-  if (serverEnv.CRON_SECRET) {
+  // Fail-closed : sans CRON_SECRET en production, on refuse d'exécuter
+  // (l'endpoint déclenche des envois d'emails en masse + sessions Stripe).
+  if (!serverEnv.CRON_SECRET) {
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV) {
+      console.error('cron daily — CRON_SECRET manquante : endpoint refusé.');
+      return NextResponse.json({ error: 'Serveur mal configuré.' }, { status: 500 });
+    }
+    console.warn('cron daily — CRON_SECRET absente en développement : endpoint ouvert.');
+  } else {
     const auth = request.headers.get('authorization');
     if (auth !== `Bearer ${serverEnv.CRON_SECRET}`) {
       return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
@@ -31,11 +39,17 @@ export async function POST(request: Request) {
   const report: string[] = [];
   const now = new Date();
 
-  // 1. Expirations d'offres.
+  // 1. Expirations d'offres et de demandes proposées (les deux statuts portent
+  //    un `offeredExpiresAt` et bloquent des espaces tant qu'ils vivent).
   const expiredOffers = await db
     .select({ id: bookings.id })
     .from(bookings)
-    .where(and(eq(bookings.status, 'offered'), lt(bookings.offeredExpiresAt, now)));
+    .where(
+      and(
+        sql`${bookings.status} in ('proposed', 'offered')`,
+        lt(bookings.offeredExpiresAt, now)
+      )
+    );
   for (const offer of expiredOffers) {
     const res = await expireOfferedBooking(offer.id);
     if (res.ok) report.push(`expirée ${offer.id}`);

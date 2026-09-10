@@ -8,7 +8,8 @@ import {
   integer,
   jsonb,
   index,
-  varchar 
+  uniqueIndex,
+  varchar
 } from 'drizzle-orm/pg-core';
 import { defineRelations } from 'drizzle-orm';
 
@@ -204,8 +205,13 @@ export const clients = pgTable('clients', {
   isB2b: boolean('is_b2b').default(false).notNull(),
 
   // Jeton dossier (G9) : généré à la première demande, envoyé par email → ouvre
-  // /espace/<token> (toutes les réservations du client). Unique.
+  // /espace/<token> (toutes les réservations du client).
+  // Sécurité (M1) : seul le hash SHA-256 du jeton est stocké en base. La colonne
+  // legacy `access_token` (en clair) est conservée le temps de la transition,
+  // puis supprimée.
   accessToken: text('access_token').unique(),
+  accessTokenHash: text('access_token_hash').unique(),
+  accessTokenRotatedAt: timestamp('access_token_rotated_at'),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -399,9 +405,12 @@ export const dailyReports = pgTable('daily_reports', {
   medicationGiven: boolean('medication_given').default(false).notNull(),
   medicationNotes: text('medication_notes'),
   notes: text('notes'),
-  
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  // Une tâche « fait » par animal et par jour (persistée par /dashboard/taches).
+  petDateIdx: uniqueIndex('daily_reports_pet_date_idx').on(table.petId, table.reportDate),
+}));
 
 // ==========================================
 // 10. COMMUNICATIONS & AGENT IA
@@ -480,11 +489,25 @@ export const outboundEmails = pgTable('outbound_emails', {
 export const clientResumeLinks = pgTable('client_resume_links', {
   id: uuid('id').defaultRandom().primaryKey(),
   clientId: uuid('client_id').references(() => clients.id, { onDelete: 'cascade' }).notNull(),
-  token: text('token').notNull().unique(),
+  // Sécurité (M1) : seul le hash SHA-256 du jeton est stocké.
+  tokenHash: text('token_hash').notNull().unique(),
   expiresAt: timestamp('expires_at').notNull(),
   usedAt: timestamp('used_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+// Anti-abus des parcours publics (rate-limit persistant, fonctionne sur
+// serverless où une mémoire par instance ne suffit pas).
+export const rateLimitHits = pgTable(
+  'rate_limit_hits',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    scope: text('scope').notNull(), // ex: 'reserver', 'demande_publique', 'login'
+    identifier: text('identifier').notNull(), // hash SHA-256 de l'IP
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [index('rate_limit_scope_ident_idx').on(t.scope, t.identifier, t.createdAt)]
+);
 
 // ==========================================
 // 11. FACTURATION CLIENT (VENTES)

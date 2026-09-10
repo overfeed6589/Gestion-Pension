@@ -43,6 +43,33 @@ export const createClientWithPetSchema = z.object({
   pet: createPetSchema,
 });
 
+// Complétion par le client depuis /espace (G9) : allow-list stricte des champs
+// modifiables par le détenteur du jeton — jamais `clientId`, `species`, `name`
+// ni le JSONB `vaccines` (réservés au personnel).
+export const clientPetCompletionSchema = z
+  .object({
+    identificationNumber: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9]{10,15}$/, 'Numéro I-CAD invalide (10 à 15 caractères alphanumériques)')
+      .nullish(),
+    birthDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date de naissance invalide')
+      .nullish(),
+    breed: z.string().trim().max(100).nullish(),
+    sex: z.enum(['M', 'F']).optional(),
+    isSterilized: z.boolean().optional(),
+    passportNumber: z.string().trim().max(50).nullish(),
+    veterinarianName: z.string().trim().max(120).nullish(),
+    veterinarianPhone: z.string().trim().max(30).nullish(),
+    vaccinesUpToDate: z.boolean().optional(),
+    medicalNotes: z.string().trim().max(2000).nullish(),
+  })
+  .strict();
+
+export type ClientPetCompletionInput = z.infer<typeof clientPetCompletionSchema>;
+
 export type VaccineInput = z.infer<typeof vaccineSchema>;
 export type CreatePetInput = z.infer<typeof createPetSchema>;
 export type CreateClientWithPetInput = z.infer<typeof createClientWithPetSchema>;
