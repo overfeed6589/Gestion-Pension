@@ -42,7 +42,8 @@ export async function toggleDailyTaskDoneAction(
           )
         );
     }
-    revalidatePath('/dashboard/taches');
+    // Le tableau de bord est maintenant la seule page des tâches du jour (H2).
+    revalidatePath('/dashboard');
     return { success: true, message: done ? 'Tâche effectuée.' : 'Tâche réouverte.' };
   } catch (error) {
     console.error('toggleDailyTaskDoneAction :', error);
