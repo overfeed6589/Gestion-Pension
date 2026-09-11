@@ -13,17 +13,17 @@ import { FicheStack } from '@/components/fiches/FicheStack';
 // vraie sécurité ; ici c'est ergonomique). `dev`/`owner` (boss) voient tout.
 // ---------------------------------------------------------------------------
 
-type NavLink = { href: string; label: string; roles: string[] };
+type NavLink = { href: string; label: string; roles: string[]; section?: string };
 
 const NAV_LINKS: NavLink[] = [
   { href: '/dashboard', label: 'Tableau de bord', roles: ['secretary', 'staff', 'owner', 'dev'] },
   { href: '/dashboard/offres', label: 'Offres & réservations', roles: ['secretary', 'owner', 'dev'] },
-  { href: '/dashboard/bookings', label: 'Réservations', roles: ['secretary', 'staff', 'owner', 'dev'] },
+  { href: '/dashboard/informations/reservations', label: 'Réservations', roles: ['secretary', 'staff', 'owner', 'dev'], section: 'Informations' },
+  { href: '/dashboard/informations/clients', label: 'Clients', roles: ['secretary', 'owner', 'dev'], section: 'Informations' },
+  { href: '/dashboard/informations/animaux', label: 'Animaux', roles: ['staff', 'owner', 'dev'], section: 'Informations' },
+  { href: '/dashboard/informations/factures', label: 'Factures', roles: ['secretary', 'owner', 'dev'], section: 'Informations' },
   { href: '/dashboard/register', label: 'Registre / planning', roles: ['secretary', 'staff', 'owner', 'dev'] },
-  { href: '/dashboard/taches', label: 'Tâches du jour', roles: ['staff', 'owner', 'dev'] },
   { href: '/dashboard/fiches', label: 'Fiches techniques', roles: ['staff', 'owner', 'dev'] },
-  { href: '/dashboard/clients', label: 'Clients', roles: ['secretary', 'owner', 'dev'] },
-  { href: '/dashboard/invoices', label: 'Factures', roles: ['secretary', 'owner', 'dev'] },
   { href: '/dashboard/housing', label: 'Logements & box', roles: ['secretary', 'staff', 'owner', 'dev'] },
   { href: '/dashboard/purchase-orders', label: 'Commandes', roles: ['owner', 'dev'] },
   { href: '/dashboard/rapports', label: 'Rapports', roles: ['owner', 'dev'] },
@@ -42,19 +42,25 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <aside className="fixed inset-y-0 left-0 w-60 bg-slate-900 text-slate-100 flex flex-col">
         <div className="px-4 py-5 border-b border-slate-800">
           <p className="font-semibold text-sm leading-tight">Gestion Pension</p>
-          <p className="text-xs text-slate-400 mt-1">Itération 1 — pilote</p>
+          <p className="text-xs text-slate-400 mt-1">Itération 2 — réorganisation</p>
         </div>
-        <nav className="flex-1 px-2 py-4 space-y-1">
+        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
           {NAV_LINKS.filter(
             (link) => !profile?.role || link.roles.includes(profile.role)
-          ).map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="block px-3 py-2 rounded text-sm text-slate-200 hover:bg-slate-800 transition"
-            >
-              {link.label}
-            </Link>
+          ).map((link, index, filtered) => (
+            <div key={link.href}>
+              {link.section && (index === 0 || filtered[index - 1].section !== link.section) && (
+                <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  {link.section}
+                </p>
+              )}
+              <Link
+                href={link.href}
+                className="block px-3 py-2 rounded text-sm text-slate-200 hover:bg-slate-800 transition"
+              >
+                {link.label}
+              </Link>
+            </div>
           ))}
         </nav>
         <div className="px-4 py-4 border-t border-slate-800 text-xs text-slate-400 space-y-2">

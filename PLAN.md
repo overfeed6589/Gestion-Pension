@@ -356,16 +356,21 @@ fin de chantier, CI verte à chaque phase.
   Planning/RDV, exportés one-way vers Google Calendar.
 
 **Ordre des phases H**
-1. **H1 — Socle fiches pop-up** : `FicheModal` générique (URL query params,
-   empilement), loaders server action (`getFicheClient/Animal/Reservation`),
-   composants partagés `FicheClient`/`FicheAnimal`/`FicheReservation`,
-   branchés sur les pages existantes.
-2. **H2 — Tableau de bord** « événements du jour » : arrivées, départs, rdv,
-   relances créneaux (J-15/7/1), paiements attendus, tâches staff
+1. **H1 (fait)** — Socle fiches pop-up : `FicheModal` générique (URL query params,
+   empilement), loaders server action (`loadFiche`), composants partagés
+   `FicheClient`/`FicheAnimal`/`FicheReservation`, branchés sur les pages
+   existantes (clients, réservations liste + détail).
+2. **H2 (fait)** — Tableau de bord « événements du jour » : arrivées, départs,
+   paiements attendus, relances créneaux (J-15/7/1), tâches staff
    (`daily_reports`) ; lendemain en colonne gauche ; tout cliquable → pop-up.
-   Remplace `/dashboard/taches`.
-3. **H3 — Informations** : réservations (fusion offres, « non traitées »
-   visibles), clients, animaux, factures.
+   `lib/dashboard/events.ts` agrège les données ; `/dashboard/taches` redirige
+   vers `/dashboard`.
+3. **H3 (fait)** — Branche Informations : `/dashboard/informations/`
+   {`reservations` (liste unifiée avec badge « Non traitée » pour
+   requested/proposed + actions itération 1 conservées), `clients` (reprise),
+   `animaux` (nouvelle liste avec statut vaccins), `factures` (reprise)}.
+   Nav réorganisée avec section « Informations » ; anciennes routes
+   (/bookings, /clients, /invoices, /offres) encore accessibles jusqu'à H9.
 4. **H4 — Planning** : table `appointments` + vue semaine RDV + vue 2 mois
    par box + export Google Calendar one-way.
 5. **H5 — Infrastructure** : logements (déplacé) + inventaire/commandes.
