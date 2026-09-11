@@ -7,6 +7,11 @@ import { getPensionSettings } from '@/lib/settings';
 import { logAudit } from '@/lib/audit';
 import { shouldRefundDeposit } from '@/lib/refund-policy';
 import { requestTimeSlots } from '@/lib/booking-emails';
+import {
+  EVENT_ID_PREFIX,
+  deleteCalendarEvent,
+  isCalendarConfigured,
+} from '@/lib/integrations/google-calendar';
 
 // ---------------------------------------------------------------------------
 // Cycle de vie financier d'un séjour (Phase G3/G4)
@@ -283,6 +288,16 @@ export async function cancelBooking(
         .update(payments)
         .set({ status: 'refunded' })
         .where(eq(payments.stripePaymentIntentId, depositPaymentIntent));
+    }
+
+    // Nettoyage de l'export Google Calendar — non-bloquant (Phase H4).
+    if (isCalendarConfigured()) {
+      try {
+        await deleteCalendarEvent(`${EVENT_ID_PREFIX}arr-${bookingId}`);
+        await deleteCalendarEvent(`${EVENT_ID_PREFIX}dep-${bookingId}`);
+      } catch (calError) {
+        console.error('cancelBooking : suppression événements Google Calendar —', calError);
+      }
     }
 
     return {

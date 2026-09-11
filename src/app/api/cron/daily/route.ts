@@ -9,6 +9,7 @@ import { formatCents } from '@/lib/money';
 import { serverEnv } from '@/lib/env';
 import { remindMissingTimeSlots, sendCompletionInvites } from '@/lib/booking-emails';
 import { sendBookingEmailOnce, hasEmailBeenSent } from '@/lib/outbound-emails';
+import { reconcileCalendar } from '@/lib/planning/calendar-sync';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -176,5 +177,27 @@ export async function POST(request: Request) {
     console.error('cron daily — relances heures :', error);
   }
 
+  // Export Google Calendar (Phase H4) : arrivées/départs/rdv de la semaine à
+  // venir. Non-bloquant : une erreur ne doit pas empêcher le reste du cron.
+  try {
+    const calReport = await reconcileCalendar(7);
+    report.push(...calReportCompact(calReport));
+  } catch (error) {
+    console.error('cron daily — Google Calendar :', error);
+  }
+
   return NextResponse.json({ received: true, report });
+}
+
+/**
+ * Le rapport de réconciliation peut être long (2 événements par séjour) :
+ * on le compresse en un résumé par statut pour ne pas gonfler la réponse.
+ */
+function calReportCompact(lines: string[]): string[] {
+  const counts = new Map<string, number>();
+  for (const line of lines) {
+    const key = line.split(':').slice(1).join(':') || 'inconnu';
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([key, count]) => `cal:${key}:${count}`);
 }

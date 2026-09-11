@@ -371,8 +371,18 @@ fin de chantier, CI verte à chaque phase.
    `animaux` (nouvelle liste avec statut vaccins), `factures` (reprise)}.
    Nav réorganisée avec section « Informations » ; anciennes routes
    (/bookings, /clients, /invoices, /offres) encore accessibles jusqu'à H9.
-4. **H4 — Planning** : table `appointments` + vue semaine RDV + vue 2 mois
-   par box + export Google Calendar one-way.
+4. **H4 (fait)** — Planning : table `appointments` (migration
+   `20260911144018_massive_havok`), vue semaine RDV
+   (`/dashboard/planning/rdv` : arrivées/départs/visites/autres + création/
+   suppression de rdv, fuseau Europe/Paris), vue 2 mois par box
+   (`/dashboard/planning/animaux`). Export Google Calendar **one-way
+   non-bloquant** (`lib/integrations/google-calendar.ts`, compte de service
+   JWT RS256 sans `googleapis`, ids d'événements déterministes) : upsert à
+   la création/suppression de rdv, suppression à l'annulation d'une
+   réservation, réconciliation hebdo dans le cron quotidien. Sans les envs
+   `GOOGLE_CALENDAR_ID` + `GOOGLE_SERVICE_ACCOUNT_KEY` l'export est
+   silencieusement désactivé (état affiché dans la page). Nav : section
+   « Planning » (Registre reste accessible, sans sous-menu).
 5. **H5 — Infrastructure** : logements (déplacé) + inventaire/commandes.
 6. **H6 — Logs** : page owner/dev + cron archivage mensuel.
 7. **H7 — Contact** : réception IMAP, file d'approbation par type, newsletter

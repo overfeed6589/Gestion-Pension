@@ -122,6 +122,11 @@ export type PaymentMethod = typeof PAYMENT_METHODS[number];
 export type PaymentTransactionStatus = typeof PAYMENT_TRANSACTION_STATUSES[number];
 export type BillingType = typeof BILLING_TYPES[number];
 
+// Types de rdv du planning (Phase H4) : visites de la pension ou autres rdv
+// internes (rappel vétérinaire à venir chercher, livraison…).
+export const APPOINTMENT_TYPES = ['visit', 'other'] as const;
+export type AppointmentType = (typeof APPOINTMENT_TYPES)[number];
+
 // ==========================================
 // 1bis. RÔLES & PROFILS (contrôle d'accès — Phase A2)
 // ==========================================
@@ -510,6 +515,27 @@ export const rateLimitHits = pgTable(
 );
 
 // ==========================================
+// 10quater. RDV DU PLANNING (Phase H4)
+// ==========================================
+// Visites et autres rdv (hors réservations de séjour). Client/animal
+// optionnels (un rdv peut concerner un prospect sans dossier). L'export
+// Google Calendar est one-way : `googleEventId` mémorise l'identifiant de
+// l'événement distant pour la mise à jour/suppression.
+export const appointments = pgTable('appointments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  type: text('type', { enum: APPOINTMENT_TYPES }).default('visit').notNull(),
+  title: text('title').notNull(),
+  startsAt: timestamp('starts_at').notNull(),
+  durationMinutes: integer('duration_minutes').default(30).notNull(),
+  clientId: uuid('client_id').references(() => clients.id, { onDelete: 'set null' }),
+  petId: uuid('pet_id').references(() => pets.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  googleEventId: text('google_event_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// ==========================================
 // 11. FACTURATION CLIENT (VENTES)
 // ==========================================
 export const invoices = pgTable('invoices', {
@@ -606,6 +632,7 @@ export const relations = defineRelations(
     messages,
     pensionRules,
     internalNotes,
+    appointments,
     // --- NOUVELLES TABLES ---
     invoices,
     invoiceItems,
@@ -685,6 +712,11 @@ export const relations = defineRelations(
       client: r.one.clients({ from: r.internalNotes.clientId, to: r.clients.id }),
       pet: r.one.pets({ from: r.internalNotes.petId, to: r.pets.id }),
       booking: r.one.bookings({ from: r.internalNotes.bookingId, to: r.bookings.id }),
+    },
+
+    appointments: {
+      client: r.one.clients({ from: r.appointments.clientId, to: r.clients.id }),
+      pet: r.one.pets({ from: r.appointments.petId, to: r.pets.id }),
     },
 
     // --- NOUVELLES RELATIONS ---
