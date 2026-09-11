@@ -1,8 +1,10 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { getCurrentProfile } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/server';
 import { logout } from '@/app/login/action';
+import { FicheStack } from '@/components/fiches/FicheStack';
 
 // ---------------------------------------------------------------------------
 // Shell du dashboard (Phase G — Lot 3)
@@ -70,6 +72,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <main className="pl-60 min-h-screen">
         <div className="p-6 max-w-7xl mx-auto">{children}</div>
       </main>
+      {/* Fenêtres « fiche » empilées (Phase H1) — pilotées par l'URL, montées
+          une seule fois pour que toutes les pages en bénéficient. */}
+      <Suspense fallback={null}>
+        <FicheStack />
+      </Suspense>
     </div>
   );
 }

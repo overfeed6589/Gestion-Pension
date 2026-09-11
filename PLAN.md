@@ -296,10 +296,92 @@ données d'un client ne sont jamais rendues sur simple saisie d'email.
 
 ---
 
+## Phase H — Réorganisation du back-office (itération 2)
+
+Arborescence cible, fiches pop-up sans navigation, nouvelles pages. Cadré par
+grill (décisions ci-dessous), déploiement **incrémental** : les routes
+nouvelles coexistent avec les anciennes, redirects 301 des anciennes routes en
+fin de chantier, CI verte à chaque phase.
+
+**Arborescence cible**
+```
+/dashboard                         Tableau de bord « événements du jour » (+ lendemain en colonne gauche)
+/dashboard/planning
+  /planning/rdv                    Vue semaine : arrivées/départs/visites/autres rdv — export Google Calendar
+  /planning/animaux                Vue ~2 mois : animaux présents par box (clic → fiche)
+/dashboard/informations
+  /informations/reservations       Liste unifiée (offres en attente marquées « non traitées »)
+  /informations/clients            /informations/animaux    /informations/factures
+  /informations/fiche-technique    (réservée, pas cette itération)
+/dashboard/infrastructure
+  /infrastructure/logements        (ex housing)
+  /infrastructure/inventaire       Inventaire (checklist articles) + commandes fournisseurs
+/dashboard/rapports                Onglets : occupation, CA & services annexes, clients, annulations
+                                   + fiches individuelles animal/client, comparaison N-1, export CSV/PDF
+/dashboard/logs                    Audit 1 mois (niveau action), archivage au-delà, owner/dev
+/dashboard/contact
+  /contact/emails                  Boîte IMAP + file d'envois auto (approbation par type)
+  /contact/newsletter              Opt-in clients + envoi SMTP + désinscription
+  /contact/whatsapp                Squelette (modèle prêt pour Meta Cloud API, branchement plus tard)
+/dashboard/parametres              Infos pension + automatismes (toggles d'envoi par type) + gestion des accès
+/dashboard/compte                  Session courante : nom affiché, mot de passe, préférences
+```
+
+**Décisions (grill 2026-09-11)**
+- Existant : Offres → fusionnées dans Informations/Réservations (non traitées
+  marquées). Tâches → remplacées par le dashboard (tâches staff intégrées).
+  Fiches techniques → abandonnées pour l'instant. Registre → remplacé par la
+  branche Planning.
+- Fiches pop-up : pilotées par l'**URL** (query params, un param par couche
+  empilée : `?client=…&pet=…&booking=…`), données chargées côté client via
+  server actions → refresh/partage OK, pas de navigation de page.
+- Fiche réservation « accueil client » : **checklist structurée**
+  (`checklist_items` par réservation, catégories affaires/documents/paiement/
+  questions), pré-remplie à la confirmation depuis un template éditable dans
+  Paramètres ; sert de mémo le jour de l'arrivée.
+- Google Calendar : **export one-way** (compte de service, agenda de la
+  pension) pour arrivées/départs/rdv + réconciliation quotidienne par cron.
+- Logs : niveau **action** (audit_logs existant), fenêtre 1 mois puis
+  archivage (`audit_logs_archive`, cron).
+- Contact : boîte mail **IMAP/SMTP Google** (identifiants en env via
+  `serverEnv`, jamais en base), polling cron → `email_messages` ; les emails
+  automatiques passent par une file `email_queue` avec statut
+  `pending_approval` quand le toggle du kind est désactivé dans Paramètres ;
+  newsletter opt-in (`clients.newsletterOptIn` + `newsletter_campaigns`) ;
+  WhatsApp = squelette cette itération (Meta Cloud API plus tard).
+- Inventaire : checklist d'articles « censés être à la pension » avec note et
+  « dernière commande le … » ; coche = demande de commande (brouillon
+  `purchase_orders` + signal pour la personne gérante).
+- Nouvelle table `appointments` (visites / autres rdv), créés depuis
+  Planning/RDV, exportés one-way vers Google Calendar.
+
+**Ordre des phases H**
+1. **H1 — Socle fiches pop-up** : `FicheModal` générique (URL query params,
+   empilement), loaders server action (`getFicheClient/Animal/Reservation`),
+   composants partagés `FicheClient`/`FicheAnimal`/`FicheReservation`,
+   branchés sur les pages existantes.
+2. **H2 — Tableau de bord** « événements du jour » : arrivées, départs, rdv,
+   relances créneaux (J-15/7/1), paiements attendus, tâches staff
+   (`daily_reports`) ; lendemain en colonne gauche ; tout cliquable → pop-up.
+   Remplace `/dashboard/taches`.
+3. **H3 — Informations** : réservations (fusion offres, « non traitées »
+   visibles), clients, animaux, factures.
+4. **H4 — Planning** : table `appointments` + vue semaine RDV + vue 2 mois
+   par box + export Google Calendar one-way.
+5. **H5 — Infrastructure** : logements (déplacé) + inventaire/commandes.
+6. **H6 — Logs** : page owner/dev + cron archivage mensuel.
+7. **H7 — Contact** : réception IMAP, file d'approbation par type, newsletter
+   opt-in, squelette WhatsApp.
+8. **H8 — Paramètres élargis + Compte** ; nav réorganisée (sous-menus).
+9. **H9 — Redirects** des anciennes routes puis suppression des pages
+   remplacées (offres, bookings, clients, invoices, housing, purchase-orders,
+   register, taches, fiches).
+
 ## Ordre d'implémentation
 
 A1 → A2 → A4/A5 → B1/B2 → A3 (console) → C → D (migrations + CI + tests)
-→ **G (itération 1, cible mi-octobre)** → **G9 (parcours client v2)** → E → F.
+→ **G (itération 1, cible mi-octobre)** → **G9 (parcours client v2)**
+→ **H (réorganisation back-office, en cours)** → E → F.
 Chaque étape : implémentation commentée → vérification (`npx tsc --noEmit`, `npm run lint`)
 → proposition de commit → validation manuelle.
 

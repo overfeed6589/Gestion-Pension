@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { db } from '@/db';
 import { requireRole } from '@/lib/auth';
 import { formatCents } from '@/lib/money';
+import { FicheLink } from '@/components/fiches/FicheLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,10 +58,16 @@ export default async function BookingsPage() {
             {rows.map((b) => (
               <tr key={b.id}>
                 <td className="px-3 py-2">
-                  {b.client ? `${b.client.firstName} ${b.client.lastName}` : '—'}
+                  {b.client ? (
+                    <FicheLink kind="client" id={b.client.id}>
+                      {b.client.firstName} {b.client.lastName}
+                    </FicheLink>
+                  ) : '—'}
                 </td>
                 <td className="px-3 py-2">
-                  {b.checkInDate.toISOString().slice(0, 10)} → {b.checkOutDate.toISOString().slice(0, 10)}
+                  <FicheLink kind="booking" id={b.id}>
+                    {b.checkInDate.toISOString().slice(0, 10)} → {b.checkOutDate.toISOString().slice(0, 10)}
+                  </FicheLink>
                 </td>
                 <td className="px-3 py-2">{STATUS_LABELS[b.status] ?? b.status}</td>
                 <td className="px-3 py-2">{PAYMENT_LABELS[b.paymentStatus] ?? b.paymentStatus}</td>

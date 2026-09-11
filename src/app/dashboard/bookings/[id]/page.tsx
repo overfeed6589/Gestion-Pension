@@ -5,6 +5,7 @@ import { payments } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { requireRole } from '@/lib/auth';
 import { formatCents } from '@/lib/money';
+import { FicheLink } from '@/components/fiches/FicheLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +61,13 @@ export default async function BookingDetailPage({
           {booking.checkOutDate.toISOString().slice(0, 10)}
         </h1>
         <p className="text-sm text-slate-700 mt-1">
-          {booking.client ? `${booking.client.firstName} ${booking.client.lastName}` : 'Client inconnu'}
+          {booking.client ? (
+            <FicheLink kind="client" id={booking.client.id}>
+              {booking.client.firstName} {booking.client.lastName}
+            </FicheLink>
+          ) : (
+            'Client inconnu'
+          )}
           {' · '}
           {STATUS_LABELS[booking.status] ?? booking.status} · {formatCents(booking.totalPrice)} ·
           payé {formatCents(paid)} · reste {formatCents(outstanding)}
@@ -80,7 +87,16 @@ export default async function BookingDetailPage({
                 {s.startDate} → {s.endDate} · {formatCents(s.segmentPrice)}
               </span>
               <span className="text-slate-600">
-                {s.occupantLinks.map((l) => l.pet?.name).filter(Boolean).join(', ') || '—'}
+                {s.occupantLinks.some((l) => l.pet)
+                  ? s.occupantLinks.map((l, i) =>
+                      l.pet ? (
+                        <span key={l.pet.id}>
+                          {i > 0 && ', '}
+                          <FicheLink kind="pet" id={l.pet.id}>{l.pet.name}</FicheLink>
+                        </span>
+                      ) : null
+                    )
+                  : '—'}
               </span>
             </li>
           ))}

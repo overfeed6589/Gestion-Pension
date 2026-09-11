@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/auth';
 import { ClientPetForm } from '@/components/clients/ClientPetForm';
 import { PetAddForm } from '@/components/clients/PetAddForm';
 import { RotateAccessLinkButton } from '@/components/clients/RotateAccessLinkButton';
+import { FicheLink } from '@/components/fiches/FicheLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,12 +43,22 @@ export default async function ClientsPage() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="font-semibold">
-                      {client.firstName} {client.lastName}
+                      <FicheLink kind="client" id={client.id} className="hover:text-slate-900">
+                        {client.firstName} {client.lastName}
+                      </FicheLink>
                     </p>
                     <p className="text-xs text-slate-700">{client.email} • {client.phone}</p>
                     <p className="text-xs text-slate-700 mt-1">
-                      Animaux : {client.pets.map((p) => p.name).join(', ') || '—'} •
-                      Réservations : {client.bookings.length}
+                      Animaux :{' '}
+                      {client.pets.length === 0
+                        ? '—'
+                        : client.pets.map((p, i) => (
+                            <span key={p.id}>
+                              {i > 0 && ', '}
+                              <FicheLink kind="pet" id={p.id}>{p.name}</FicheLink>
+                            </span>
+                          ))}{' '}
+                      • Réservations : {client.bookings.length}
                     </p>
                   </div>
                 </div>
