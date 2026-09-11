@@ -383,7 +383,12 @@ fin de chantier, CI verte à chaque phase.
    `GOOGLE_CALENDAR_ID` + `GOOGLE_SERVICE_ACCOUNT_KEY` l'export est
    silencieusement désactivé (état affiché dans la page). Nav : section
    « Planning » (Registre reste accessible, sans sous-menu).
-5. **H5 — Infrastructure** : logements (déplacé) + inventaire/commandes.
+5. **H5 (fait)** — Infrastructure : `/dashboard/infrastructure/logements`
+   (reprise de Housing) + `/dashboard/infrastructure/inventaire` (checklist
+   `inventory_items` : note, « dernière commande le … », coche « à commander »
+   → signal pour la personne gérante + bouton « commandé ✓ » ; section
+   Commandes fournisseurs reprise). Migration `20260911145021_brief_morg`,
+   actions auditées (`inventory.*`), section nav « Infrastructure ».
 6. **H6 — Logs** : page owner/dev + cron archivage mensuel.
 7. **H7 — Contact** : réception IMAP, file d'approbation par type, newsletter
    opt-in, squelette WhatsApp.

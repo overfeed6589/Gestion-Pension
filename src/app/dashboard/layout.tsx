@@ -26,8 +26,8 @@ const NAV_LINKS: NavLink[] = [
   { href: '/dashboard/planning/animaux', label: 'Animaux par box', roles: ['secretary', 'staff', 'owner', 'dev'], section: 'Planning' },
   { href: '/dashboard/register', label: 'Registre (check-in/out)', roles: ['secretary', 'staff', 'owner', 'dev'] },
   { href: '/dashboard/fiches', label: 'Fiches techniques', roles: ['staff', 'owner', 'dev'] },
-  { href: '/dashboard/housing', label: 'Logements & box', roles: ['secretary', 'staff', 'owner', 'dev'] },
-  { href: '/dashboard/purchase-orders', label: 'Commandes', roles: ['owner', 'dev'] },
+  { href: '/dashboard/infrastructure/logements', label: 'Logements & box', roles: ['secretary', 'staff', 'owner', 'dev'], section: 'Infrastructure' },
+  { href: '/dashboard/infrastructure/inventaire', label: 'Inventaire & commandes', roles: ['secretary', 'staff', 'owner', 'dev'], section: 'Infrastructure' },
   { href: '/dashboard/rapports', label: 'Rapports', roles: ['owner', 'dev'] },
   { href: '/dashboard/parametres', label: 'Paramètres', roles: ['owner', 'dev'] },
 ];

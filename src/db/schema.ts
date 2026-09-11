@@ -612,6 +612,25 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
 });
 
 // ==========================================
+// 13. INVENTAIRE (Phase H5)
+// ==========================================
+// Checklist d'articles « censés être à la pension » : chaque article porte une
+// note libre et la date de dernière commande. Une coche « à commander »
+// signale à la personne gérante qu'il faut passer une commande (l'historique
+// des commandes vit dans `purchase_orders`, section Commandes).
+export const inventoryItems = pgTable('inventory_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  note: text('note'),
+  lastOrderedAt: timestamp('last_ordered_at'),
+  orderRequestedAt: timestamp('order_requested_at'),
+  orderRequestedBy: uuid('order_requested_by').references(() => profiles.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  nameIdx: index('inventory_items_name_idx').on(table.name),
+}));
+
+// ==========================================
 // RELATIONS UNIFIÉES (defineRelations)
 // ==========================================
 export const relations = defineRelations(
@@ -639,6 +658,7 @@ export const relations = defineRelations(
     suppliers,
     purchaseOrders,
     purchaseOrderItems,
+    inventoryItems,
   }, 
   (r) => ({
     clients: {
