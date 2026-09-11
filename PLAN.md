@@ -389,7 +389,10 @@ fin de chantier, CI verte à chaque phase.
    → signal pour la personne gérante + bouton « commandé ✓ » ; section
    Commandes fournisseurs reprise). Migration `20260911145021_brief_morg`,
    actions auditées (`inventory.*`), section nav « Infrastructure ».
-6. **H6 — Logs** : page owner/dev + cron archivage mensuel.
+6. **H6 (fait)** — Logs : page `/dashboard/logs` (owner/dev, niveau action,
+   filtres type d'entité/action, pagination, fenêtre 1 mois) ; archive
+   `audit_logs_archive` (migration `20260911145509_daily_apocalypse`) et
+   archivage quotidien par le cron (`lib/audit-archive.ts`, lots de 500).
 7. **H7 — Contact** : réception IMAP, file d'approbation par type, newsletter
    opt-in, squelette WhatsApp.
 8. **H8 — Paramètres élargis + Compte** ; nav réorganisée (sous-menus).

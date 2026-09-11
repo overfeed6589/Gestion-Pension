@@ -631,6 +631,24 @@ export const inventoryItems = pgTable('inventory_items', {
 }));
 
 // ==========================================
+// 14. ARCHIVE AUDIT (Phase H6)
+// ==========================================
+// Même forme que `audit_logs` : le cron quotidien déplace les lignes de plus
+// de 30 jours vers l'archive (fenêtre de consultation Logs = 1 mois).
+export const auditLogsArchive = pgTable('audit_logs_archive', {
+  id: uuid('id').primaryKey(),
+  action: text('action').notNull(),
+  entityType: text('entity_type').notNull(),
+  entityId: text('entity_id'),
+  actorId: uuid('actor_id'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').notNull(),
+}, (table) => ({
+  entityIdx: index('audit_logs_archive_entity_idx').on(table.entityType, table.entityId),
+  dateIdx: index('audit_logs_archive_date_idx').on(table.createdAt),
+}));
+
+// ==========================================
 // RELATIONS UNIFIÉES (defineRelations)
 // ==========================================
 export const relations = defineRelations(
@@ -659,6 +677,7 @@ export const relations = defineRelations(
     purchaseOrders,
     purchaseOrderItems,
     inventoryItems,
+    auditLogsArchive,
   }, 
   (r) => ({
     clients: {

@@ -10,6 +10,7 @@ import { serverEnv } from '@/lib/env';
 import { remindMissingTimeSlots, sendCompletionInvites } from '@/lib/booking-emails';
 import { sendBookingEmailOnce, hasEmailBeenSent } from '@/lib/outbound-emails';
 import { reconcileCalendar } from '@/lib/planning/calendar-sync';
+import { archiveOldAuditLogs } from '@/lib/audit-archive';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -184,6 +185,14 @@ export async function POST(request: Request) {
     report.push(...calReportCompact(calReport));
   } catch (error) {
     console.error('cron daily — Google Calendar :', error);
+  }
+
+  // Archivage des logs (Phase H6) : entrées de plus de 30 jours → archive.
+  try {
+    const archived = await archiveOldAuditLogs();
+    if (archived > 0) report.push(`audit-archivé:${archived}`);
+  } catch (error) {
+    console.error('cron daily — archivage audit :', error);
   }
 
   return NextResponse.json({ received: true, report });

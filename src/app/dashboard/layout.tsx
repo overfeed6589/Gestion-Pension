@@ -28,6 +28,7 @@ const NAV_LINKS: NavLink[] = [
   { href: '/dashboard/fiches', label: 'Fiches techniques', roles: ['staff', 'owner', 'dev'] },
   { href: '/dashboard/infrastructure/logements', label: 'Logements & box', roles: ['secretary', 'staff', 'owner', 'dev'], section: 'Infrastructure' },
   { href: '/dashboard/infrastructure/inventaire', label: 'Inventaire & commandes', roles: ['secretary', 'staff', 'owner', 'dev'], section: 'Infrastructure' },
+  { href: '/dashboard/logs', label: 'Logs', roles: ['owner', 'dev'] },
   { href: '/dashboard/rapports', label: 'Rapports', roles: ['owner', 'dev'] },
   { href: '/dashboard/parametres', label: 'Paramètres', roles: ['owner', 'dev'] },
 ];
